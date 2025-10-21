@@ -1,4 +1,4 @@
-log_format_ = f"%(asctime)s - [%(levelname)s] - %(name)s - %(filename)s.%(funcName)s:%(lineno)d - %(message)s"
+log_format_ = "%(asctime)s - [%(levelname)s] - %(name)s - %(filename)s.%(funcName)s:%(lineno)d - %(message)s"
 
 
 class Settings:

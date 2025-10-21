@@ -1,9 +1,7 @@
 import os
 import json
 import logging
-import numpy as np
 import polars as pl
-import pyarrow as pa
 import pyarrow.parquet as pq
 from pyarrow import fs
 from itertools import product
@@ -580,4 +578,3 @@ def prepare_contract_data(
 
 def get_time_count(col_name: str):
     return pl.col(col_name).dt.year() * 12 + pl.col(col_name).dt.month()
-

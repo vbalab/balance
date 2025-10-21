@@ -128,7 +128,9 @@ class AbstractCalculator(ABC):
     def __init__(
         self,
         model_register: ModelRegister,
-        models: Dict[str, ModelInfo],   # TODO: this is in ModelRegister already, because `str` here is ModelPrefix in `model_register.adapter_types[str]`
+        models: Dict[
+            str, ModelInfo
+        ],  # TODO: this is in ModelRegister already, because `str` here is ModelPrefix in `model_register.adapter_types[str]`
         # TODO: receive ForecastContext, not scenario & model_data
         scenario: Scenario,
         model_data: Dict[str, Any] = None,
@@ -150,7 +152,7 @@ class AbstractCalculator(ABC):
         pass
 
 
-class SingleModelCalculator(AbstractCalculator):    # TODO: check if used at all
+class SingleModelCalculator(AbstractCalculator):  # TODO: check if used at all
     # TODO: the same applies here
     def __init__(
         self,

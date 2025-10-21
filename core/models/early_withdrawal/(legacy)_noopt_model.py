@@ -15,7 +15,6 @@ from upfm.commons import (
     BaseModel,
     ModelInfo,
     ForecastContext,
-    _REPORT_DT_COLUMN,
 )
 
 from deposit_early_redemption.spark_pandas import spark_df_toPandas

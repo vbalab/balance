@@ -2,7 +2,7 @@ import logging
 import pandas as pd
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Dict, List, Any, Type
+from typing import Dict, List, Any
 
 from core.calculator.storage import ModelDB
 from core.upfm.commons import DataLoader, Scenario, MLException

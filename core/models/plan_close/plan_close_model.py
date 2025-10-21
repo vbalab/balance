@@ -2,23 +2,18 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from pandas.tseries.offsets import MonthEnd
-from core.models.newbusiness.simple_adapters import SimpleDataLoader, SimpleModelTrainer
-from pickle import dump, PickleError, load
+from core.models.newbusiness.simple_adapters import SimpleModelTrainer
 import pyspark.sql.functions as f
 from pyspark.sql import Window
 from core.upfm.commons import (
     DataLoader,
     BaseModel,
-    ModelInfo,
     ForecastContext,
     _REPORT_DT_COLUMN,
     ModelMetaInfo,
 )
-import sys
-import os.path
-from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple
-from core.models.utils import convert_decimals, dt_convert, check_existence
+from core.models.utils import convert_decimals
 from core.definitions import PORTFOLIO_COLUMNS_
 
 CONFIG = {

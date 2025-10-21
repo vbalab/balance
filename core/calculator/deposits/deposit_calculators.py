@@ -1,6 +1,6 @@
 from enum import auto
 
-from typing import Dict, List
+from typing import Dict
 import pandas as pd
 
 from upfm.commons import ModelInfo, BaseModel
@@ -126,9 +126,9 @@ class DepositNewbusinessCalculator(AbstractCalculator):
             "VIP_OPT": maturity_structure_vip_opt,
         }
 
-        self._forecast_context.model_data[
-            maturity_structure_model_key
-        ] = maturitystructure
+        self._forecast_context.model_data[maturity_structure_model_key] = (
+            maturitystructure
+        )
         return maturitystructure
 
     def calculate_size_structure(self) -> Dict[str, pd.DataFrame]:
@@ -183,9 +183,9 @@ class DepositNewbusinessCalculator(AbstractCalculator):
     def calculate_early_redemption(self):
         early_redemption_model_key = "EARLY_REDEMPTION"
         early_redemption_portfolio_key = "ER_PORTFOLIO"
-        early_redemption_noopt_res: Dict[
-            str, pd.DataFrame
-        ] = self.early_redemption_noopt_model.predict(self._forecast_context)
+        early_redemption_noopt_res: Dict[str, pd.DataFrame] = (
+            self.early_redemption_noopt_model.predict(self._forecast_context)
+        )
         cols_noopt = list(
             set(early_redemption_noopt_res["current_portfolio"].columns)
             & set(early_redemption_noopt_res["newbiz_portfolio"].columns)
@@ -198,9 +198,9 @@ class DepositNewbusinessCalculator(AbstractCalculator):
             axis=0,
         ).reset_index(drop=True)
 
-        early_redemption_opt_res: Dict[
-            str, pd.DataFrame
-        ] = self.early_redemption_opt_model.predict(self._forecast_context)
+        early_redemption_opt_res: Dict[str, pd.DataFrame] = (
+            self.early_redemption_opt_model.predict(self._forecast_context)
+        )
         cols_opt = list(
             set(early_redemption_opt_res["current_portfolio"].columns)
             & set(early_redemption_opt_res["newbiz_portfolio"].columns)
@@ -221,9 +221,9 @@ class DepositNewbusinessCalculator(AbstractCalculator):
             "OPT": early_redemption_opt_res,
         }
         self._forecast_context.model_data[early_redemption_model_key] = early_redemption
-        self._forecast_context.model_data[
-            early_redemption_portfolio_key
-        ] = early_redemption_portfolio
+        self._forecast_context.model_data[early_redemption_portfolio_key] = (
+            early_redemption_portfolio
+        )
         return early_redemption
 
     def calculate_renewal(self):

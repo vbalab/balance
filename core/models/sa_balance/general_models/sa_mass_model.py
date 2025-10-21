@@ -1,6 +1,4 @@
 import pandas as pd
-import numpy as np
-from copy import deepcopy
 
 from core.models.newbusiness.simple_adapters import (
     SimpleDataLoader,
@@ -8,22 +6,17 @@ from core.models.newbusiness.simple_adapters import (
     SimpleModelAdapter,
 )
 from core.upfm.commons import (
-    DataLoader,
-    ModelTrainer,
-    BaseModel,
     _REPORT_DT_COLUMN,
     ModelInfo,
     ForecastContext,
     ModelMetaInfo,
-    ModelContainer,
 )
 from core.models.utils import (
     verify_data,
     gen_sa_product_balance_model_name,
-    calculate_sa_model_features,
 )
 from datetime import datetime
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any
 from prophet import Prophet
 
 
@@ -83,31 +76,31 @@ class SaBalanceMassModel:
             "SA_avg_rate_[other]_[mass]",
         ]
 
-        X_exog.loc[:, f"wr_max_[mass]"] = X.loc[:, products_rate].max(axis=1).fillna(0)
+        X_exog.loc[:, "wr_max_[mass]"] = X.loc[:, products_rate].max(axis=1).fillna(0)
 
-        X_exog.loc[:, f"spread_[VTB-SBER]_[mass]"] = (
+        X_exog.loc[:, "spread_[VTB-SBER]_[mass]"] = (
             (
-                X.loc[:, f"DPST_rate_[general]_[mass]"]
-                - X.loc[:, f"DPST_rate_[sber]_[mass]"]
+                X.loc[:, "DPST_rate_[general]_[mass]"]
+                - X.loc[:, "DPST_rate_[sber]_[mass]"]
             )
             .fillna(method="bfill")
             .fillna(method="ffill")
         )
 
-        X_exog.loc[:, f"spread_[VTB-SBER]_[mass]_rel"] = (
-            X_exog.loc[:, f"spread_[VTB-SBER]_[mass]"]
-            / X.loc[:, f"DPST_rate_[sber]_[mass]"]
+        X_exog.loc[:, "spread_[VTB-SBER]_[mass]_rel"] = (
+            X_exog.loc[:, "spread_[VTB-SBER]_[mass]"]
+            / X.loc[:, "DPST_rate_[sber]_[mass]"]
         )
 
-        X_exog.loc[:, f"spread_[SA-DPST_[short]]_[mass]"] = (
-            (X_exog.loc[:, f"wr_max_[mass]"] - X.loc[:, f"DPST_rate_[short]_[mass]"])
+        X_exog.loc[:, "spread_[SA-DPST_[short]]_[mass]"] = (
+            (X_exog.loc[:, "wr_max_[mass]"] - X.loc[:, "DPST_rate_[short]_[mass]"])
             .fillna(method="bfill")
             .fillna(method="ffill")
         )
 
-        X_exog.loc[:, f"spread_[SA-DPST_[short]]_[mass]_rel"] = (
-            X_exog.loc[:, f"spread_[SA-DPST_[short]]_[mass]"]
-            / X.loc[:, f"DPST_rate_[short]_[mass]"]
+        X_exog.loc[:, "spread_[SA-DPST_[short]]_[mass]_rel"] = (
+            X_exog.loc[:, "spread_[SA-DPST_[short]]_[mass]"]
+            / X.loc[:, "DPST_rate_[short]_[mass]"]
         )
 
         # зануляем лишнее

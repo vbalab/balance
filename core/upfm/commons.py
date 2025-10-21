@@ -56,7 +56,7 @@ class ModelInfo:
             training_period = TrainingPeriod(from_dt, to_dt)
             prefix_: str = separator.join(parts[:-2])
             info_: ModelInfo = ModelInfo(prefix_, training_period)
-        except Exception as e:
+        except Exception:
             pass
 
         return info_

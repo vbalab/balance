@@ -484,7 +484,7 @@ class ModelDB:
         pass
 
     def save_backtest(self, backtest_info: BackTestInfoEntity) -> bool:
-        logger.info(f"saving backtest info")
+        logger.info("saving backtest info")
         res: bool = False
         backtest_info.saved_at = datetime.now()
         try:

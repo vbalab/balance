@@ -1,11 +1,10 @@
 import logging
 import pandas as pd
-from abc import ABC
 from functools import reduce
 from datetime import datetime
 from dataclasses import dataclass
 from pyspark.sql import SparkSession
-from typing import Dict, List, Tuple, Any, Type
+from typing import Dict, List, Tuple, Any
 
 from core.upfm.commons import (
     DataLoader,

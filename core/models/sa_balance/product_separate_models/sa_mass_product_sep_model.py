@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from copy import deepcopy
 from core.models.newbusiness.simple_adapters import (
     SimpleDataLoader,
     SimpleModelTrainer,
@@ -8,17 +7,10 @@ from core.models.newbusiness.simple_adapters import (
 )
 from core.models.utils import gen_sa_product_structure_model_name
 from core.upfm.commons import (
-    DataLoader,
-    ModelTrainer,
-    BaseModel,
-    _REPORT_DT_COLUMN,
     ModelInfo,
-    ForecastContext,
     ModelMetaInfo,
-    ModelContainer,
 )
 from datetime import datetime
-from typing import Dict, Any, Tuple, List
 
 CONFIG = {
     "features": [

@@ -1,12 +1,6 @@
 import pandas as pd
-import numpy as np
-from copy import deepcopy
-from sklearn.linear_model import LinearRegression
 from core.models.utils import (
-    generate_svo_flg,
     verify_data,
-    gen_newbiz_model_name,
-    gaussian_kernel,
     parse_buckets_from_port,
     calc_model_bucket_share,
     calc_new_shares,
@@ -18,22 +12,14 @@ from core.models.newbusiness.simple_adapters import (
     SimpleModelAdapter,
 )
 from core.upfm.commons import (
-    DataLoader,
-    BaseModel,
     _REPORT_DT_COLUMN,
     ModelInfo,
     ForecastContext,
     ModelMetaInfo,
-    ModelContainer,
 )
 from core.definitions import *
-from core.models.utils import (
-    calculate_weighted_ftp_rate,
-    calculate_max_rate,
-    calculate_max_weighted_rate,
-)
 from datetime import datetime
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, Tuple
 
 
 # в сценарии зашить бакеты со ставками
@@ -60,7 +46,7 @@ CONFIG = {
     "table_name": None,
     "table_date_col": _REPORT_DT_COLUMN,
     "default_start_date": datetime(2014, 2, 1),
-    "model_name": f"newbusiness_mass_model_buckets",
+    "model_name": "newbusiness_mass_model_buckets",
 }
 
 

@@ -9,7 +9,7 @@ from core.models.sa_balance.product_models import (
     SaKopilkaVip,
 )
 
-from core.upfm.commons import ModelMetaInfo, ModelContainer
+from core.upfm.commons import ModelContainer
 
 
 SaModelsMass = ModelContainer(models=(SaBalanceMass, SaKopilkaMass))

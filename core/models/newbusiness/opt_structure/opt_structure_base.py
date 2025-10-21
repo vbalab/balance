@@ -1,6 +1,4 @@
-from core.upfm.commons import DataLoader, ModelTrainer, BaseModel, _REPORT_DT_COLUMN
-import pandas as pd
-import numpy as np
+from core.upfm.commons import DataLoader, ModelTrainer, BaseModel
 
 
 class OptStructureBaseModel:

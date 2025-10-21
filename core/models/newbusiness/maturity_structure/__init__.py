@@ -6,7 +6,6 @@ from .maturity_structure_mass_model import (
 )
 from .maturity_structure_mass_model import (
     MaturityStructureMassR0S1Model,
-    MaturityStructureMassR0S1DataLoader,
     MaturityStructureMassR0S1ModelTrainer,
     MaturityStructureMassR0S1ModelAdapter,
 )

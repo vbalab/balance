@@ -1,7 +1,5 @@
 from sklearn.ensemble import RandomForestRegressor
 import pandas as pd
-import numpy as np
-from copy import deepcopy
 from core.models.utils import (
     verify_data,
     gen_opt_model_name,
@@ -14,13 +12,10 @@ from core.models.newbusiness.simple_adapters import (
     SimpleModelAdapter,
 )
 from core.upfm.commons import (
-    DataLoader,
-    BaseModel,
     _REPORT_DT_COLUMN,
     ModelInfo,
     ForecastContext,
     ModelMetaInfo,
-    ModelContainer,
 )
 from datetime import datetime
 
@@ -30,7 +25,7 @@ CONFIG = {
         "VTB_weighted_rate_[vip]_[r1s1]",
         "VTB_weighted_rate_[vip]_[r0s0]",
         "VTB_max_weighted_rate_[vip]_[r0s0]",
-        "VTB_max_rate_available_[vip]_[r0s0]"  # ,
+        "VTB_max_rate_available_[vip]_[r0s0]",  # ,
         #'VTB_weighted_rate_[vip]_[r0s0]_[90d]'
     ],
     "full_features": [

@@ -9,10 +9,7 @@ from pandas.tseries.offsets import MonthEnd
 from core.upfm.commons import (
     ModelInfo,
     BaseModel,
-    DataLoader,
     Scenario,
-    ModelMetaInfo,
-    ModelContainer,
     _REPORT_DT_COLUMN,
 )
 from core.calculator.core.calc_base import (
@@ -38,10 +35,8 @@ from core.models.utils import (
     calculate_weighted_rates,
     calculate_absolute_inflows_nondefault_segments,
     parse_buckets_from_port,
-    calc_model_bucket_share,
 )
 from core.definitions import (
-    MATURITY_,
     OPTIONALS_,
     DEFAULT_SEGMENTS_,
     NONDEFAULT_SEGMENTS_,
@@ -219,9 +214,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         ).model_name
 
         model_info: ModelInfo = self._models[model_name]
-        self.maturity_structure_models[
-            (segment, repl, sub)
-        ] = self._model_register.get_model(model_info)
+        self.maturity_structure_models[(segment, repl, sub)] = (
+            self._model_register.get_model(model_info)
+        )
 
     def _set_early_withdrawal_model_by_params(self, segment: str, repl: int, sub: int):
         model_name: str = EarlyWithdrawal.get_model_by_conditions(
@@ -229,9 +224,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         ).model_name
 
         model_info: ModelInfo = self._models[model_name]
-        self.early_withdrawal_models[
-            (segment, repl, sub)
-        ] = self._model_register.get_model(model_info)
+        self.early_withdrawal_models[(segment, repl, sub)] = (
+            self._model_register.get_model(model_info)
+        )
 
     def _set_early_withdrawal_models(self):
         self.early_withdrawal_models: Dict[Tuple[str, int, int], BaseModel] = {}
@@ -294,9 +289,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         for ca_model in CurrentAccounts.models:
             model_name: str = ca_model.model_name
             model_info: ModelInfo = self._models[model_name]
-            self.current_accounts_models[
-                ca_model.model_trainer.prediction_type
-            ] = self._model_register.get_model(model_info)
+            self.current_accounts_models[ca_model.model_trainer.prediction_type] = (
+                self._model_register.get_model(model_info)
+            )
 
     def _add_scenario_to_model_data(self, forecast_date):
         scenario_cols = self._scenario.scenario_data.columns
@@ -308,9 +303,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         self, prediction_df: pd.DataFrame, forecast_date: datetime
     ):
         cols = prediction_df.columns
-        self._forecast_context.model_data["features"].loc[
-            forecast_date, cols
-        ] = prediction_df.loc[forecast_date, :]
+        self._forecast_context.model_data["features"].loc[forecast_date, cols] = (
+            prediction_df.loc[forecast_date, :]
+        )
 
     def _add_weighted_rates(self, forecast_date, segment=None, repl=None, sub=None):
         df_date = self._forecast_context.model_data["features"].loc[[forecast_date], :]
@@ -719,9 +714,9 @@ class DepositIterativeCalculator(AbstractCalculator):
 
     def _portfolio_result(self, port):
         port["bucketed_balance_nm"] = port.bucketed_balance.apply(
-            lambda x: BUCKETED_BALANCE_MAP_[x]
-            if x in BUCKETED_BALANCE_MAP_
-            else "<100k"
+            lambda x: (
+                BUCKETED_BALANCE_MAP_[x] if x in BUCKETED_BALANCE_MAP_ else "<100k"
+            )
         )
         port.loc[:, "renewal_cnt"] = port.weight_renewal_cnt.round()
         port.loc[:, "operations_in_month"] = np.where(

@@ -1,13 +1,11 @@
 from core.upfm.commons import DataLoader, _REPORT_DT_COLUMN
 from datetime import datetime
-import numpy as np
 import pandas as pd
 from core.definitions import SCENARIO_COLUMNS_, PORTFOLIO_COLUMNS_
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, Tuple
 import pyspark.sql.functions as f
 from pyspark.sql import Window
-from core.models.utils import dt_convert, convert_decimals
-from pandas.tseries.offsets import MonthEnd
+from core.models.utils import convert_decimals
 
 CONFIG = {
     "scenario_cols": SCENARIO_COLUMNS_,

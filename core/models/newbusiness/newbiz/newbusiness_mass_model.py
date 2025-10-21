@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from copy import deepcopy
 from sklearn.linear_model import LinearRegression
 from core.models.utils import generate_svo_flg, verify_data, gen_newbiz_model_name
 from core.models.newbusiness.simple_adapters import (
@@ -9,13 +8,10 @@ from core.models.newbusiness.simple_adapters import (
     SimpleModelAdapter,
 )
 from core.upfm.commons import (
-    DataLoader,
-    BaseModel,
     _REPORT_DT_COLUMN,
     ModelInfo,
     ForecastContext,
     ModelMetaInfo,
-    ModelContainer,
 )
 from core.models.utils import (
     calculate_weighted_ftp_rate,
@@ -23,7 +19,7 @@ from core.models.utils import (
     calculate_max_weighted_rate,
 )
 from datetime import datetime
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any
 
 
 CONFIG = {

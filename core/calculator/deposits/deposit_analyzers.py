@@ -1,7 +1,6 @@
 import logging
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 from typing import Any, Dict
 from pyspark.sql import SparkSession
 from plotly.subplots import make_subplots
@@ -147,7 +146,9 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
         try:
             return self._metrics[metric_name](pred, truth)
         except:
-            logger.info(f"Metric `{metric_name}` does not support this input format of data")
+            logger.info(
+                f"Metric `{metric_name}` does not support this input format of data"
+            )
 
     def _apply_metrics(self, pred, truth) -> Dict[str, Any]:
         return {
@@ -159,16 +160,16 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
         metrics_data = []
         pred_all_steps = []
         truth_all_steps = []
-        
+
         num_steps = engine._config.steps
 
         for step in range(1, num_steps + 1):
             pred = self._pred_values_extractor(engine, step, tag)
             truth = self._ground_truth_extractor(engine, step, tag)
-            
+
             pred_all_steps.append(pred)
             truth_all_steps.append(truth)
-            
+
             step_row = {
                 "backtest_step": step,
                 "first_forecast_date": engine._config.forecast_dates[step][0],
@@ -217,7 +218,9 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
 
         if len(pred.columns) > 1:
             return self._plot_single_chart_data(
-                data=pred, plot_method="area", markers=True,
+                data=pred,
+                plot_method="area",
+                markers=True,
             )
         else:
             return self._plot_single_chart_data(data=pred, markers=True)
@@ -236,9 +239,11 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
             fig = make_subplots(
                 rows=engine._config.steps,
                 cols=1,
-                vertical_spacing=vertical_spacing / (engine._config.steps - 1)
-                if engine._config.steps > 1
-                else 0,
+                vertical_spacing=(
+                    vertical_spacing / (engine._config.steps - 1)
+                    if engine._config.steps > 1
+                    else 0
+                ),
                 subplot_titles=[
                     f"Backtest step {step}"
                     for step in range(1, engine._config.steps + 1)
@@ -359,9 +364,9 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
             fig = make_subplots(
                 rows=len(columns),
                 subplot_titles=columns,
-                vertical_spacing=vertical_spacing / (len(columns) - 1)
-                if len(columns) > 1
-                else 0,
+                vertical_spacing=(
+                    vertical_spacing / (len(columns) - 1) if len(columns) > 1 else 0
+                ),
             )
             for row, col in enumerate(columns):
                 single_fig = self._plot_single_chart_data(
@@ -419,10 +424,10 @@ class DepositAnalyzer(SimpleCalculatorAnalyzer):
         return df
 
     def _get_product_name(self, fcst_col, trth_col):
-        return f"deposits_portfolio"
+        return "deposits_portfolio"
 
     def _get_chart_name(self, fcst_path, trth_path):
-        return f"Прогноз портфеля депозитов"
+        return "Прогноз портфеля депозитов"
 
 
 class NewbusinessAnalyzer(SimpleCalculatorAnalyzer):

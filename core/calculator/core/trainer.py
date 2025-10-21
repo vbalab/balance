@@ -1,6 +1,5 @@
 import logging
 from os import path
-from glob import glob
 from io import BytesIO
 from os import makedirs
 from datetime import datetime
@@ -74,7 +73,7 @@ class TrainingManager:
                         path.join(self._model_folder, model_path),
                         True,
                     )
-        except Exception as e:
+        except Exception:
             logger.exception(f"failed to train the model {tag}")
             return False
 
@@ -98,7 +97,7 @@ class TrainingManager:
 
     def _load_models(self):
         if not self._db:
-            raise ValueError(f"Model db is None, use force_training")
+            raise ValueError("Model db is None, use force_training")
 
         for tag in self._trainers:
             for step in self._end_dates:

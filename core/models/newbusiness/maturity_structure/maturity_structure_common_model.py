@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.linear_model import Ridge
 from datetime import datetime
 from typing import Dict, Any, Tuple
-from pickle import dump, PickleError, load
+from pickle import dump, PickleError
 import pyspark.sql.functions as f
 from core.upfm.commons import (
     DataLoader,
@@ -15,7 +15,6 @@ from core.upfm.commons import (
     ForecastContext,
 )
 from core.models.utils import dt_convert, check_existence
-from sklearn.base import BaseEstimator
 
 
 def gen_maturity_model_name(segment, repl, sub):

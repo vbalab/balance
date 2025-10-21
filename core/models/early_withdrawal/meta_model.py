@@ -1,7 +1,6 @@
 import os.path
 from datetime import datetime, timedelta
 from functools import reduce
-from itertools import product
 from bisect import bisect_left
 from pickle import PickleError, dump
 from typing import Any, Dict, List, Tuple
@@ -19,7 +18,6 @@ from core.upfm.commons import (
     DataLoader,
     ModelTrainer,
     ForecastContext,
-    ModelInfo,
 )
 from .base_model import EarlyRedemptionModel, early_redemption_ptr_transform
 from core.models.utils import dt_convert, find_left_nearest_point
@@ -32,7 +30,6 @@ from core.definitions import (
     MONTH_MATURITY_MAP_,
     MATURITY_TO_MONTH_MAP_,
 )
-from .spark_pandas import spark_df_toPandas
 from pandas.tseries.offsets import MonthEnd
 
 # try:
@@ -196,7 +193,7 @@ CONFIG = {
             ],
             "weighted_vtb_rate": get_feature_name(
                 "VTB_weighted_rate", segment, repl, sub
-            )
+            ),
             # Выяснить что это значит
             #'external_configs': EXTRENAL_MODELS_CONFIGS['configs'][:2]
         }
@@ -847,9 +844,9 @@ class MetaAdapter(Meta):
                 f_port["total_generation_lag1"] + 1
             )
             for period in self.periods_list:
-                f_port.loc[
-                    :, f"report_weight_open_rate_{period}m"
-                ] = self._gen_rate_scenario(pred_date, period)
+                f_port.loc[:, f"report_weight_open_rate_{period}m"] = (
+                    self._gen_rate_scenario(pred_date, period)
+                )
 
             f_port.loc[:, "row_count"] = np.where(
                 res[-1]["row_count"] > 0, res[-1]["row_count"] + 1, -1
@@ -892,19 +889,19 @@ class MetaAdapter(Meta):
             portfolio["bucketed_period"] + 1 - portfolio["months_passed"]
         )
 
-        portfolio.loc[
-            portfolio["optional_flg"].isin([1, 3]), "incentive"
-        ] = portfolio.loc[
-            portfolio["optional_flg"].isin([1, 3]), "spread_weight_rates_wo_period"
-        ]
+        portfolio.loc[portfolio["optional_flg"].isin([1, 3]), "incentive"] = (
+            portfolio.loc[
+                portfolio["optional_flg"].isin([1, 3]), "spread_weight_rates_wo_period"
+            ]
+        )
 
         # Для вкладов без опции снятия
-        portfolio.loc[
-            portfolio["optional_flg"].isin([0, 2]), "incentive"
-        ] = portfolio.loc[
-            portfolio["optional_flg"].isin([0, 2]),
-            "spread_weight_rate_&_weight_open_rate",
-        ]
+        portfolio.loc[portfolio["optional_flg"].isin([0, 2]), "incentive"] = (
+            portfolio.loc[
+                portfolio["optional_flg"].isin([0, 2]),
+                "spread_weight_rate_&_weight_open_rate",
+            ]
+        )
         portfolio.loc[:, "incentive_lag1"] = portfolio.groupby("gen_name")[
             "incentive"
         ].shift()
@@ -1035,9 +1032,9 @@ class MetaAdapter(Meta):
                 )
 
             for period in self.periods_list:
-                f_port.loc[
-                    :, f"report_weight_open_rate_{period}m"
-                ] = self._gen_rate_scenario(pred_date, period)
+                f_port.loc[:, f"report_weight_open_rate_{period}m"] = (
+                    self._gen_rate_scenario(pred_date, period)
+                )
             f_port.loc[:, "report_wo_period_weight_open_rate"] = weighted_rates.loc[
                 pred_date, self.weighted_vtb_rate
             ]
@@ -1150,9 +1147,9 @@ class MetaAdapter(Meta):
                 )
 
             for period in self.periods_list:
-                f_port.loc[
-                    :, f"report_weight_open_rate_{period}m"
-                ] = self._gen_rate_scenario(pred_date, period)
+                f_port.loc[:, f"report_weight_open_rate_{period}m"] = (
+                    self._gen_rate_scenario(pred_date, period)
+                )
             zero_cols = [
                 "weight_renewal_cnt",
                 "total_interests",
@@ -1275,19 +1272,19 @@ class MetaAdapter(Meta):
             portfolio["bucketed_period"] + 1 - portfolio["months_passed"]
         )
 
-        portfolio.loc[
-            portfolio["optional_flg"].isin([1, 3]), "incentive"
-        ] = portfolio.loc[
-            portfolio["optional_flg"].isin([1, 3]), "spread_weight_rates_wo_period"
-        ]
+        portfolio.loc[portfolio["optional_flg"].isin([1, 3]), "incentive"] = (
+            portfolio.loc[
+                portfolio["optional_flg"].isin([1, 3]), "spread_weight_rates_wo_period"
+            ]
+        )
 
         # Для вкладов без опции снятия
-        portfolio.loc[
-            portfolio["optional_flg"].isin([0, 2]), "incentive"
-        ] = portfolio.loc[
-            portfolio["optional_flg"].isin([0, 2]),
-            "spread_weight_rate_&_weight_open_rate",
-        ]
+        portfolio.loc[portfolio["optional_flg"].isin([0, 2]), "incentive"] = (
+            portfolio.loc[
+                portfolio["optional_flg"].isin([0, 2]),
+                "spread_weight_rate_&_weight_open_rate",
+            ]
+        )
         portfolio.loc[:, "incentive_lag1"] = portfolio.groupby("gen_name")[
             "incentive"
         ].shift()

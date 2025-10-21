@@ -1,4 +1,4 @@
-from core.upfm.commons import ModelMetaInfo, ModelContainer
+from core.upfm.commons import ModelContainer
 from core.models.plan_close.plan_close_model import PlanClose
 from core.models.newbusiness.maturity_structure.maturity_structure_meta import (
     MaturityStructure,

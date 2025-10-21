@@ -1,9 +1,8 @@
-import numpy as np
 import os
 import pandas as pd
 from datetime import datetime
 from typing import Dict, Any, Tuple
-from pickle import dump, PickleError, load
+from pickle import dump, PickleError
 import pyspark.sql.functions as f
 from core.upfm.commons import (
     DataLoader,

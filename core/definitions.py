@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from datetime import datetime
 from bisect import bisect_left
 from pandas.tseries.offsets import MonthEnd
 
@@ -243,9 +242,9 @@ def preprocess_scenario_from_file(scenario_df, train_end, horizon):
                 :, f"margin_r0s0_[{mat}d]"
             ]
             for segment in DEFAULT_SEGMENTS_:
-                scenario_df.loc[
-                    :, f"{segment}_spread_r{repl}s{sub}_[{mat}d]"
-                ] = scenario_df.loc[:, f"{segment}_spread_r0s0_[{mat}d]"]
+                scenario_df.loc[:, f"{segment}_spread_r{repl}s{sub}_[{mat}d]"] = (
+                    scenario_df.loc[:, f"{segment}_spread_r0s0_[{mat}d]"]
+                )
     scenario_dates = pd.date_range(
         start=train_end + MonthEnd(1), periods=horizon, freq="M"
     )

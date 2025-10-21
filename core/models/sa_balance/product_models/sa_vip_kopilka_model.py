@@ -1,6 +1,4 @@
 import pandas as pd
-import numpy as np
-from copy import deepcopy
 
 # sys.path.append('../../../..')
 from core.models.newbusiness.simple_adapters import (
@@ -9,18 +7,14 @@ from core.models.newbusiness.simple_adapters import (
     SimpleModelAdapter,
 )
 from core.upfm.commons import (
-    DataLoader,
-    ModelTrainer,
-    BaseModel,
     _REPORT_DT_COLUMN,
     ModelInfo,
     ForecastContext,
     ModelMetaInfo,
-    ModelContainer,
 )
-from core.models.utils import verify_data, gen_sa_product_balance_model_name
+from core.models.utils import gen_sa_product_balance_model_name
 from datetime import datetime
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any
 
 from sktime.forecasting.naive import NaiveForecaster
 

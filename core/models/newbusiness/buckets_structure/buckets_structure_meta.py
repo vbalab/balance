@@ -3,7 +3,7 @@ from .buckets_structure_priv_model import NewbusinessBucketsPriv
 from .buckets_structure_vip_model import NewbusinessBucketsVip
 
 
-from core.upfm.commons import ModelMetaInfo, ModelContainer
+from core.upfm.commons import ModelContainer
 
 NewbusinessBuckets = ModelContainer(
     models=(NewbusinessBucketsMass, NewbusinessBucketsPriv, NewbusinessBucketsVip)

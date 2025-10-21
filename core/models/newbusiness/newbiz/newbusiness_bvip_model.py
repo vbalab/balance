@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from copy import deepcopy
 from sklearn.linear_model import LinearRegression
 from core.models.utils import (
     generate_svo_flg,
@@ -14,16 +13,13 @@ from core.models.newbusiness.simple_adapters import (
     SimpleModelAdapter,
 )
 from core.upfm.commons import (
-    DataLoader,
-    BaseModel,
     _REPORT_DT_COLUMN,
     ModelInfo,
     ForecastContext,
     ModelMetaInfo,
-    ModelContainer,
 )
 from datetime import datetime
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any
 
 CONFIG = {
     "features": [
