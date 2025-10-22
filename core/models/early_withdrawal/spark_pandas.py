@@ -6,7 +6,7 @@ from contextlib import closing
 from webdataset.gopen import gopen_pipe
 from getpass import getuser
 from re import sub
-from typing_extensions import Literal
+from typing import Literal
 from pyspark.sql.dataframe import DataFrame
 from pyspark.sql.column import Column
 from pyspark.sql import functions as f
