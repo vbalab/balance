@@ -1,13 +1,17 @@
+from __future__ import annotations
+
 import logging
-import pandas as pd
-from functools import reduce
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
+from functools import reduce
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+import pandas as pd
 from pyspark.sql import SparkSession
-from typing import Dict, List, Tuple, Any
 
 from core.upfm.commons import (
     DataLoader,
+    ModelInfo,
     Scenario,
     _REPORT_DT_COLUMN,
 )
@@ -19,8 +23,6 @@ from core.calculator.core import (
     TrainingManager,
 )
 from core.calculator.storage import ModelDB, BackTestInfoEntity, BackTestDataEntity
-
-
 logging.config.dictConfig(Settings.LOGGING_CONFIG)
 logger = logging.getLogger("core")
 
@@ -40,7 +42,7 @@ class BackTestConfig(BaseConfig):
 
 class BackTestEngine(AbstractEngine):
     # TODO: better move to definitions.py
-    DEPOSIT_SEGMENT_MAP = {
+    DEPOSIT_SEGMENT_MAP: Dict[str, str] = {
         "_portfolio": "portfolio",
         "_novip_": "novip",
         "_vip_": "vip",
@@ -51,7 +53,7 @@ class BackTestEngine(AbstractEngine):
         spark: SparkSession,
         config: BackTestConfig,
         training_manager: TrainingManager,
-        overwrite_models=True,
+        overwrite_models: bool = True,
     ) -> None:
         super().__init__(spark, config, training_manager, overwrite_models)
 
@@ -59,11 +61,11 @@ class BackTestEngine(AbstractEngine):
         self._ground_truth: Dict[Tuple[int, str], Dict[str, pd.DataFrame]] = {}
 
     @property
-    def prediction_data(self):
+    def prediction_data(self) -> Dict[Tuple[int, str], Dict[str, pd.DataFrame]]:
         return self._prediction_data
 
     @property
-    def ground_truth(self):
+    def ground_truth(self) -> Dict[Tuple[int, str], Dict[str, pd.DataFrame]]:
         return self._ground_truth
 
     def _load_data(self, step: int, tag: str) -> None:
@@ -103,7 +105,7 @@ class BackTestEngine(AbstractEngine):
         )
 
     def _create_calculator(self, step: int) -> AbstractCalculator:
-        models = {
+        models: Dict[str, ModelInfo] = {
             tag: self.trained_models[(step, tag)] for tag in self._config.trainers
         }
 
@@ -125,7 +127,7 @@ class BackTestEngine(AbstractEngine):
             model_data,
         )
 
-    def _run_step(self, step: int):
+    def _run_step(self, step: int) -> None:
         for tag in self._config.data_loaders:
             self._load_data(step, tag)
 
@@ -171,8 +173,8 @@ class BackTestEngine(AbstractEngine):
     def save_to_db(
         self,
         model_db: ModelDB,
-        analyzers: List[Any],
-        segment_map: Dict[str, str] = DEPOSIT_SEGMENT_MAP,
+        analyzers: Iterable[Any],
+        segment_map: Optional[Dict[str, str]] = DEPOSIT_SEGMENT_MAP,
     ) -> bool:
         dfs: List[pd.DataFrame] = []
 
@@ -186,8 +188,9 @@ class BackTestEngine(AbstractEngine):
                 dfs.append(v)
 
         df: pd.DataFrame = pd.concat(dfs)
+        mapping: Dict[str, str] = segment_map if segment_map is not None else {}
         df["segment"] = df.apply(
-            lambda x: AbstractEngine.get_segment(x["product"], segment_map), axis=1
+            lambda x: AbstractEngine.get_segment(x["product"], mapping), axis=1
         )
         backtest_info = self._get_backtest_entity(df)
         return model_db.save_backtest(backtest_info)
@@ -196,7 +199,7 @@ class BackTestEngine(AbstractEngine):
 @dataclass
 class BackTestHonestConfig(BaseConfig):
     steps: int = 1
-    scenario_loader: DataLoader = None
+    scenario_loader: Optional[DataLoader] = None
 
     @property
     def train_ends(self) -> List[datetime]:
@@ -213,7 +216,7 @@ class BackTestHonestEngine(AbstractEngine):
         spark: SparkSession,
         config: BackTestConfig,
         training_manager: TrainingManager,
-        overwrite_models=True,
+        overwrite_models: bool = True,
     ) -> None:
         super().__init__(spark, config, training_manager, overwrite_models)
 
@@ -224,10 +227,10 @@ class BackTestHonestEngine(AbstractEngine):
         self._ground_truth: Dict[Tuple[int, str], Dict[str, pd.DataFrame]] = {}
 
     @property
-    def prediction_data(self):
+    def prediction_data(self) -> Dict[Tuple[int, str], Dict[str, pd.DataFrame]]:
         return self._prediction_data
 
-    def _load_ground_truth(self, step):
+    def _load_ground_truth(self, step: int) -> None:
         start_dt: datetime = self._config.forecast_dates[step][0]
         end_dt: datetime = self._config.forecast_dates[step][-1]
 
@@ -237,14 +240,14 @@ class BackTestHonestEngine(AbstractEngine):
         }
 
     @property
-    def ground_truth(self):
+    def ground_truth(self) -> Dict[Tuple[int, str], Dict[str, pd.DataFrame]]:
         if not self._ground_truth:
             for step in range(1, self._config.steps + 1):
                 self._load_ground_truth(step)
 
         return self._ground_truth
 
-    def _load_scenario(self, step):
+    def _load_scenario(self, step: int) -> None:
         start_dt: datetime = self._config.forecast_dates[step][0]
         end_dt: datetime = self._config.forecast_dates[step][-1]
 
@@ -258,7 +261,7 @@ class BackTestHonestEngine(AbstractEngine):
     def _create_calc(self, step: int) -> AbstractCalculator:
         dt_: datetime = self._config.train_ends[step - 1]
 
-        models = {
+        models: Dict[str, ModelInfo] = {
             tag: self.trained_models[(step, tag)] for tag in self._config.trainers
         }
         scenario_: Scenario = Scenario(
@@ -278,7 +281,7 @@ class BackTestHonestEngine(AbstractEngine):
             model_data,
         )
 
-    def _run_step(self, step: int):
+    def _run_step(self, step: int) -> None:
         self._load_scenario(step)
         self.calc: AbstractCalculator = self._create_calc(step)
         self._calc_results[step] = self.calc.calculate(self._config.calc_type)

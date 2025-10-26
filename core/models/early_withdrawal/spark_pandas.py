@@ -1,15 +1,15 @@
 import io
-import pandas as pd
-
-from os import system
 from contextlib import closing
-from webdataset.gopen import gopen_pipe
 from getpass import getuser
+from os import system
 from re import sub
 from typing import Literal
-from pyspark.sql.dataframe import DataFrame
-from pyspark.sql.column import Column
+
+import pandas as pd
 from pyspark.sql import functions as f
+from pyspark.sql.column import Column
+from pyspark.sql.dataframe import DataFrame
+from webdataset.gopen import gopen_pipe
 
 
 def dec_detect(col: str, col_type: str) -> Column:
@@ -29,7 +29,7 @@ def convert_decimals(spark_df: DataFrame) -> DataFrame:
     return spark_df.select(select_expr)
 
 
-def hadoop_open(path):
+def hadoop_open(path: str) -> io.BytesIO:
     hadoop_pipe = f"pipe:hadoop fs -cat {path}/*"
     with closing(gopen_pipe(hadoop_pipe)) as input_stream:
         file_bytes = input_stream.read()

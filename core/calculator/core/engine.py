@@ -1,21 +1,24 @@
-import pickle
+from __future__ import annotations
+
 import logging
-import pandas as pd
-from datetime import datetime
+import pickle
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from abc import abstractmethod, ABC
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar
+
+import pandas as pd
 from pyspark.sql import SparkSession
-from typing import Dict, List, Tuple, Any, TypeVar, Type
 
 from core.calculator.storage import ModelDB
-from core.upfm.commons import ModelTrainer, DataLoader, BaseModel
+from core.upfm.commons import BaseModel, DataLoader, ModelInfo, ModelTrainer
 from core.calculator.core import (
-    Settings,
-    ModelRegister,
-    TrainingManager,
     AbstractCalculator,
-    CalculationType,
     CalculationResult,
+    CalculationType,
+    ModelRegister,
+    Settings,
+    TrainingManager,
 )
 
 logging.config.dictConfig(Settings.LOGGING_CONFIG)
@@ -26,17 +29,17 @@ logger = logging.getLogger("core")
 
 @dataclass
 class BaseConfig:
-    first_train_end_dt: datetime = None
+    first_train_end_dt: Optional[datetime] = None
     horizon: int = 1  # TODO: check if necessary here
-    trainers: Dict[str, ModelTrainer] = None
-    model_params: Dict[str, Dict[str, ModelTrainer]] = None
-    data_loaders: Dict[str, DataLoader] = None
-    calculator_type: Type[AbstractCalculator] = None
-    calc_type: CalculationType = None
-    adapter_types: Dict[str, Type[BaseModel]] = None
+    trainers: Optional[Dict[str, ModelTrainer]] = None
+    model_params: Optional[Dict[str, Dict[str, ModelTrainer]]] = None
+    data_loaders: Optional[Dict[str, DataLoader]] = None
+    calculator_type: Optional[Type[AbstractCalculator]] = None
+    calc_type: Optional[CalculationType] = None
+    adapter_types: Optional[Dict[str, Type[BaseModel]]] = None
 
     @property
-    def first_dt_str(self):
+    def first_dt_str(self) -> str:
         return self.first_train_end_dt.strftime("%Y-%m-%d")
 
     def _get_dates(self) -> List[datetime]:
@@ -63,7 +66,7 @@ class BaseConfig:
         }
 
 
-T = TypeVar("AbstractEngine")
+T = TypeVar("T", bound="AbstractEngine")
 
 
 class AbstractEngine(ABC):
@@ -80,9 +83,9 @@ class AbstractEngine(ABC):
         training_manager: TrainingManager,  # TrainingManager -> trainers: Dict[str, ModelTrainer]
         overwrite_models=True,
     ) -> None:
-        self._spark = spark
+        self._spark: SparkSession = spark
         self._config: BaseConfig = config
-        self._overwrite_models = overwrite_models
+        self._overwrite_models: bool = overwrite_models
         self._training_manager: TrainingManager = training_manager
 
         self._register: ModelRegister = ModelRegister(
@@ -91,7 +94,7 @@ class AbstractEngine(ABC):
         self._portfolio_data: Dict[Tuple[int, str], pd.DataFrame] = {}
         self._calc_results: Dict[int, CalculationResult] = {}
 
-    def __getstate__(self):
+    def __getstate__(self) -> Dict[str, Any]:
         state = self.__dict__.copy()
 
         to_exclude = {"_spark", "_training_manager"}
@@ -99,10 +102,10 @@ class AbstractEngine(ABC):
 
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: Dict[str, Any]) -> None:
         self.__dict__.update(state)
 
-    def save(self, path: str):
+    def save(self, path: str) -> None:
         with open(path, "wb") as fo:
             pickle.dump(self, fo)
 
@@ -160,22 +163,22 @@ class AbstractEngine(ABC):
             return pickle.load(fo)
 
     @property
-    def register(self):
+    def register(self) -> ModelRegister:
         return self._register
 
     @property
-    def trained_models(self):
+    def trained_models(self) -> Dict[Tuple[int, str], ModelInfo]:
         return self._training_manager.trained_models
 
     @property
-    def portfolio_data(self):
+    def portfolio_data(self) -> Dict[Tuple[int, str], pd.DataFrame]:
         return self._portfolio_data
 
     @property
-    def calc_results(self):
+    def calc_results(self) -> Dict[int, CalculationResult]:
         return self._calc_results
 
-    def train_models(self):
+    def train_models(self) -> None:
         self._training_manager.add_to_register(self._register, self._config.train_ends)
 
     @abstractmethod
@@ -185,5 +188,5 @@ class AbstractEngine(ABC):
     @abstractmethod
     def save_to_db(
         self, model_db: ModelDB, analyzers: List[Any], segment_map: Dict[str, str]
-    ) -> None:
+    ) -> Any:
         pass

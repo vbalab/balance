@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
 from core.calculator.storage.modeldb import ModelDB
 from core.upfm.commons import DataLoader
@@ -14,12 +16,14 @@ class DataLoaderProxy:  # TODO: check if even used
         save_data: bool = True,
     ) -> None:
         self._spark = spark
-        self._loaders: Dict[str, DataLaoder] = loaders
-        self._data_db: ModelDB = data_db
-        self._save_data = save_data
+        self._loaders: Dict[str, DataLoader] = loaders
+        self._data_db: Optional[ModelDB] = data_db
+        self._save_data: bool = save_data
 
-    def get_prediction_data(self, loader: str, from_dt: datetime, to: datetime):
-        prediction_data = None
+    def get_prediction_data(
+        self, loader: str, from_dt: datetime, to: datetime
+    ) -> Any:
+        prediction_data: Any = None
         if self._data_db:
             prediction_data = data_db.find_prediction_data(loader, from_dt, to)
         if not prediction_data:
@@ -31,8 +35,10 @@ class DataLoaderProxy:  # TODO: check if even used
 
         return prediction_data
 
-    def get_ground_truth(self, loader: str, from_dt: datetime, to: datetime):
-        ground_truth = None
+    def get_ground_truth(
+        self, loader: str, from_dt: datetime, to: datetime
+    ) -> Any:
+        ground_truth: Any = None
         if self._data_db:
             ground_truth = data_db.find_ground_truth(loader, from_dt, to)
         if not ground_truth:
@@ -44,8 +50,8 @@ class DataLoaderProxy:  # TODO: check if even used
 
         return ground_truth
 
-    def get_portfolio(self, loader: str, portfolio_dt: datetime):
-        portfolio = None
+    def get_portfolio(self, loader: str, portfolio_dt: datetime) -> Any:
+        portfolio: Any = None
         if self._data_db:
             portfolio = data_db.find_portfolio(loader, portfolio_dt)
         if not portfolio:

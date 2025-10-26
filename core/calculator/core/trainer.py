@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import logging
-from os import path
-from io import BytesIO
-from os import makedirs
 from datetime import datetime
+from io import BytesIO
+from os import makedirs, path
+from typing import Dict, List, Optional, Tuple
+
 from pyspark.sql import SparkSession
-from typing import Dict, Optional, List, Tuple
 
 from core.calculator.storage import ModelDB
 from core.upfm.commons import ModelTrainer, ModelInfo
@@ -24,12 +26,12 @@ class TrainingManager:
         force_training: bool = False,
         overwrite_models: bool = True,
     ) -> None:
-        self._spark = spark
-        self._trainers = trainers
-        self._db: ModelDB = modeldb
-        self._model_folder = folder
+        self._spark: SparkSession = spark
+        self._trainers: Dict[str, ModelTrainer] = trainers
+        self._db: Optional[ModelDB] = modeldb
+        self._model_folder: str = folder
         self._force_training: bool = force_training
-        self._overwrite_models = overwrite_models
+        self._overwrite_models: bool = overwrite_models
 
         self._end_dates: Dict[int, datetime] = {}
         self._trained_models: Dict[Tuple[int, str], ModelInfo] = {}
@@ -95,7 +97,7 @@ class TrainingManager:
     def _create_folders(self) -> None:
         makedirs(self._model_folder, exist_ok=True)
 
-    def _load_models(self):
+    def _load_models(self) -> None:
         if not self._db:
             raise ValueError("Model db is None, use force_training")
 
@@ -127,7 +129,7 @@ class TrainingManager:
             self._load_models()
             register.add_models_from_bytes(self._model_data)
 
-    def get_models_by_step(self, step: int):
+    def get_models_by_step(self, step: int) -> Dict[str, ModelInfo]:
         return {
             tag: self._trained_models[(step, tag)].to_model_info()
             for tag in self._trainers
@@ -137,7 +139,7 @@ class TrainingManager:
     def trained_models(self) -> Dict[Tuple[int, str], ModelInfo]:
         return self._trained_models
 
-    def train_models_one_date(self, end_dt: datetime):
+    def train_models_one_date(self, end_dt: datetime) -> None:
         self._create_folders()
         self._end_dates: Dict[int, datetime] = {1: end_dt}
 
