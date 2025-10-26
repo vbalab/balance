@@ -1,13 +1,15 @@
-import logging
-import pandas as pd
+from __future__ import annotations
 
-from os import path
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum, auto
 from glob import glob
 from io import BytesIO
-from enum import auto, Enum
-from dataclasses import dataclass
-from abc import abstractmethod, ABC
-from typing import Dict, List, Type, Any
+from os import path
+from typing import Any, Dict, Iterable, Optional, Type
+
+import pandas as pd
 
 from core.calculator.core import Settings
 from core.upfm.commons import ModelInfo, BaseModel, Scenario, ForecastContext
@@ -41,16 +43,20 @@ class ModelRegister:
 
     def __init__(
         self,
-        adapter_types: Dict[str, Type[BaseModel]] = None,
+        adapter_types: Optional[Dict[str, Type[BaseModel]]] = None,
         skip_errors: bool = True,
     ) -> None:
-        self._adapter_types: Dict[str, Type[BaseModel]] = adapter_types
+        self._adapter_types: Optional[Dict[str, Type[BaseModel]]] = adapter_types
         self._skip_errors: bool = skip_errors
 
         self._models: Dict[ModelInfo, BaseModel] = {}
 
-    def _find_adapter_type(self, model_info_: ModelInfo):
-        adapter_type_: Type[BaseModel] = self._adapter_types.get(model_info_.prefix)
+    def _find_adapter_type(
+        self, model_info_: ModelInfo
+    ) -> Optional[Type[BaseModel]]:
+        adapter_type_: Optional[Type[BaseModel]] = None
+        if self._adapter_types is not None:
+            adapter_type_ = self._adapter_types.get(model_info_.prefix)
 
         if not adapter_type_ and not self._skip_errors:
             raise RuntimeError(f"Unsupported model {model_info_.prefix}")
@@ -62,23 +68,23 @@ class ModelRegister:
             return
 
         mask: str = path.join(folder, ModelRegister.MODEL_FILE_MASK)
-        files = glob(mask, recursive=recursive)
+        files: Iterable[str] = glob(mask, recursive=recursive)
 
         for file_ in files:
             model_info_: ModelInfo = ModelInfo.from_str(
                 path.splitext(path.basename(file_))[0]
             )
 
-            adapter_type: type[BaseModel] = self._find_adapter_type(model_info_)
+            adapter_type: Optional[Type[BaseModel]] = self._find_adapter_type(
+                model_info_
+            )
 
             if adapter_type:
                 model_ = adapter_type(model_info_, file_)
                 self._models[model_info_] = model_
 
     def add_models_from_folders(
-        self,
-        folders: List[str],
-        recursive: bool = False,
+        self, folders: Iterable[str], recursive: bool = False
     ) -> None:
         for folder in folders:
             self.add_models_from_folder(folder, recursive=recursive)
@@ -87,7 +93,7 @@ class ModelRegister:
         logger.info("add_models_from_bytes")
 
         for model_info, data in model_data.items():
-            adapter_type: type[BaseModel] = self._find_adapter_type(model_info)
+            adapter_type: Optional[Type[BaseModel]] = self._find_adapter_type(model_info)
 
             if not adapter_type:
                 logger.warning(f"missing adapter for {model_info}")
@@ -109,10 +115,11 @@ class ModelRegister:
     def add_model(self, model: BaseModel) -> None:
         self._models[model.model_info] = model
 
-    def add_models(self, models: List[BaseModel]) -> None:
-        [self.add_model(model_) for model_ in models]
+    def add_models(self, models: Iterable[BaseModel]) -> None:
+        for model_ in models:
+            self.add_model(model_)
 
-    def list_models(self):
+    def list_models(self) -> Dict[ModelInfo, BaseModel]:
         return self._models
 
 
@@ -136,7 +143,7 @@ class AbstractCalculator(ABC):
         model_data: Dict[str, Any] = None,
     ) -> None:
         self._model_register: ModelRegister = model_register
-        self._models = models
+        self._models: Dict[str, ModelInfo] = models
         self._scenario: Scenario = scenario
         self._forecast_context = ForecastContext(
             # TODO: you see how strange it is to have scenario data in ForecastContext with scenario itself
@@ -158,7 +165,7 @@ class SingleModelCalculator(AbstractCalculator):  # TODO: check if used at all
         self,
         model_register: ModelRegister,
         models: Dict[str, ModelInfo],
-        scenario: pd.DataFrame,
+        scenario: Scenario,
         model_data: Dict[str, Any] = None,
     ) -> None:
         super().__init__(model_register, models, scenario, model_data)

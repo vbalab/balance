@@ -1,16 +1,20 @@
+from __future__ import annotations
+
 import logging
-import pandas as pd
-from datetime import datetime
 from dataclasses import dataclass
-from typing import Dict, List, Any
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 
 from core.calculator.storage import ModelDB
-from core.upfm.commons import DataLoader, Scenario, MLException
+from core.upfm.commons import DataLoader, MLException, ModelInfo, Scenario
 from core.calculator.core import (
-    Settings,
-    BaseConfig,
-    AbstractEngine,
     AbstractCalculator,
+    AbstractEngine,
+    BaseConfig,
+    CalculationResult,
+    Settings,
 )
 
 logging.config.dictConfig(Settings.LOGGING_CONFIG)
@@ -20,8 +24,8 @@ logger = logging.getLogger("core")
 @dataclass
 class ForecastConfig(BaseConfig):
     # TODO: why not scenario
-    scenario_data: pd.DataFrame = None
-    portfolio: pd.DataFrame = None
+    scenario_data: Optional[pd.DataFrame] = None
+    portfolio: Optional[pd.DataFrame] = None
 
     @property
     def portfolio_dt(self) -> datetime:
@@ -40,13 +44,13 @@ class ForecastEngine(AbstractEngine):
     STEP_KEY = 1
 
     @property
-    def calc_results(self):
+    def calc_results(self) -> Dict[str, pd.DataFrame]:
         return self._calc_results[STEP_KEY].calculated_data
 
     def _create_calc(self) -> AbstractCalculator:
         dt_: datetime = self._config.train_ends[0]
 
-        models = {
+        models: Dict[str, ModelInfo] = {
             tag: self.trained_models[(STEP_KEY, tag)] for tag in self._config.trainers
         }
 
@@ -101,7 +105,7 @@ class ForecastEngine1(AbstractEngine):  # TODO: delete?
     STEP_KEY = 1
 
     @property
-    def calc_results(self):
+    def calc_results(self) -> CalculationResult:
         return self._calc_results[ForecastEngine.STEP_KEY]
 
     def _load_data(self, tag: str) -> None:
@@ -113,7 +117,7 @@ class ForecastEngine1(AbstractEngine):  # TODO: delete?
 
     def _create_calc(self) -> AbstractCalculator:
         dt_: datetime = self._config.train_ends[0]
-        models = {
+        models: Dict[str, ModelInfo] = {
             tag: self.trained_models[(ForecastEngine.STEP_KEY, tag)]
             for tag in self._config.trainers
         }

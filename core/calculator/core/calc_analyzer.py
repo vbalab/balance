@@ -1,8 +1,11 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from functools import reduce
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import pandas as pd
 import plotly.graph_objects as go
-from functools import reduce
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple
 from sklearn.metrics import (
     max_error,
     mean_absolute_error,
@@ -16,7 +19,7 @@ from core.calculator.core import BackTestEngine
 
 DEFAULT_DENOMINATOR = 10**9
 DEFAULT_UNITS = "млрд. руб."
-YAXIS_LIMITS = [None, None]
+YAXIS_LIMITS: List[Optional[float]] = [None, None]
 BASIC_METRICS = {
     "rmse": lambda x, y: mean_squared_error(x, y) ** 0.5,
     "mae": mean_absolute_error,
@@ -24,6 +27,8 @@ BASIC_METRICS = {
     "r2": r2_score,
     "max_err": max_error,
 }
+
+MetricFunc = Callable[[pd.Series, pd.Series], float]
 
 
 class CalculatorAnalyzer(ABC):
@@ -41,46 +46,50 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
     This analyzer just compares predictions with truth and outputs metrics
     """
 
-    denominator = DEFAULT_DENOMINATOR
-    units = DEFAULT_UNITS
+    denominator: int = DEFAULT_DENOMINATOR
+    units: str = DEFAULT_UNITS
 
     def __init__(
         self,
         path_dict: Dict[Tuple[str, str], Tuple[str, str]],
-        metrics: Dict[str, Any] = BASIC_METRICS,
+        metrics: Dict[str, MetricFunc] = BASIC_METRICS,
     ) -> None:
         """
         Example path_dict: {('CurrentAccountsBalance', 'means_seas'): ('curr_acc_rur', 'end_balance_amt')}
         """
 
-        self._metrics = metrics
-        self._path_dict = path_dict
+        self._metrics: Dict[str, MetricFunc] = metrics
+        self._path_dict: Dict[Tuple[str, str], Tuple[str, str]] = path_dict
 
-    def _fcst_extractor(self, engine, fcst_path, backtest_step):
+    def _fcst_extractor(
+        self, engine: BackTestEngine, fcst_path: Tuple[str, str], backtest_step: int
+    ) -> pd.DataFrame:
         return (
             engine.calc_results[backtest_step]
             .calculated_data[fcst_path[0]][[_REPORT_DT_COLUMN, fcst_path[1]]]
             .rename(columns={fcst_path[1]: "pred"})
         )
 
-    def _ground_truth_extractor(self, engine, trth_path, backtest_step):
+    def _ground_truth_extractor(
+        self, engine: BackTestEngine, trth_path: Tuple[str, str], backtest_step: int
+    ) -> pd.DataFrame:
         return engine.ground_truth[(backtest_step, trth_path[0])]["target"][
             [_REPORT_DT_COLUMN, trth_path[1]]
         ].rename(columns={trth_path[1]: "truth"})
 
-    def _get_product_name(self, fcst_path) -> str:
+    def _get_product_name(self, fcst_path: Tuple[str, str]) -> str:
         return fcst_path[0]
 
-    def _get_chart_name(self, fcst_path) -> str:
+    def _get_chart_name(self, fcst_path: Tuple[str, str]) -> str:
         return "_".join(fcst_path)
 
     def _get_results_dict(
         self, engine: BackTestEngine
     ) -> Dict[Tuple[str, str], pd.DataFrame]:
-        output = dict()
+        output: Dict[Tuple[str, str], pd.DataFrame] = {}
 
         for fcst_path, trth_path in self._path_dict.items():
-            dfs = []
+            dfs: List[pd.DataFrame] = []
 
             for backtest_step in range(1, engine._config.steps + 1):
                 fcst_df = self._fcst_extractor(engine, fcst_path, backtest_step)
@@ -115,13 +124,19 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
         return output
 
     @staticmethod
-    def _apply_metric(results_df_agg, metric_name, metric_func):
+    def _apply_metric(
+        results_df_agg: pd.core.groupby.generic.DataFrameGroupBy,
+        metric_name: str,
+        metric_func: MetricFunc,
+    ) -> pd.Series:
         return results_df_agg.apply(lambda df: metric_func(df.truth, df.pred)).rename(
             metric_name
         )
 
-    def _apply_all_metrcis(self, results_df_agg):
-        output = []
+    def _apply_all_metrcis(
+        self, results_df_agg: pd.core.groupby.generic.DataFrameGroupBy
+    ) -> pd.DataFrame:
+        output: List[pd.Series] = []
         for metric_name, metric_func in self._metrics.items():
             output.append(self._apply_metric(results_df_agg, metric_name, metric_func))
         return reduce(
@@ -147,8 +162,10 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
 
         return {k: self._get_metrics_one_df(v) for k, v in results_dict.items()}
 
-    def get_chart_data(self, engine: BackTestEngine) -> Dict[Any, Any]:
-        nominal = self._get_results_dict(engine)
+    def get_chart_data(
+        self, engine: BackTestEngine
+    ) -> Dict[Tuple[str, str], pd.DataFrame]:
+        nominal: Dict[Tuple[str, str], pd.DataFrame] = self._get_results_dict(engine)
         # for k, v in nominal.items():
         #    nominal[k].loc[:, ['pred', 'truth']] = v.loc[:, ['pred', 'truth']] / self.denominator
 
@@ -156,11 +173,11 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
 
     def _plot_single_chart_data(
         self,
-        chart_name,
-        chart_data,
-        step_delimiters,
-        yaxis_limits,
-    ):
+        chart_name: str,
+        chart_data: pd.DataFrame,
+        step_delimiters: bool,
+        yaxis_limits: List[Optional[float]],
+    ) -> None:
         fig = go.Figure()
         # name = chart_data['product'].iloc[0]
         fig.add_trace(
@@ -231,7 +248,12 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
 
         fig.show()
 
-    def plot_backtest(self, engine, step_delimiters=True, yaxis_limits=YAXIS_LIMITS):
+    def plot_backtest(
+        self,
+        engine: BackTestEngine,
+        step_delimiters: bool = True,
+        yaxis_limits: List[Optional[float]] = YAXIS_LIMITS,
+    ) -> None:
         chart_datas = self.get_chart_data(engine).items()
 
         for fcst_path, chart_data in chart_datas:
@@ -255,21 +277,22 @@ class SymbolicCalculatorAnalyzer(SimpleCalculatorAnalyzer):
     def __init__(
         self,
         path_dict: Dict[Tuple[str, str], Tuple[str, str]],
-        metrics: Dict[str, Any] = None,
-    ):
+        metrics: Dict[str, MetricFunc] = None,
+    ) -> None:
         """
         Example path_dict: {('CurrentAccountsBalance', 'means_seas'): ('curr_acc_rur', 'end_balance_amt'),
              ('CurrentAccountsBalance', '(`0.95q_seas` + `0.05q_seas`)/2'): ('curr_acc_rur', 'end_balance_amt')}
         """
-        super().__init__(path_dict, metrics)
+        metrics_to_use = metrics if metrics is not None else BASIC_METRICS
+        super().__init__(path_dict, metrics_to_use)
 
     def _get_results_dict(
         self, engine: BackTestEngine
     ) -> Dict[Tuple[str, str], pd.DataFrame]:
-        output = dict()
+        output: Dict[Tuple[str, str], pd.DataFrame] = {}
 
         for fcst_path, trth_path in self._path_dict.items():
-            dfs = []
+            dfs: List[pd.DataFrame] = []
 
             fcst_eval_str = f"""
             report_dt = report_dt

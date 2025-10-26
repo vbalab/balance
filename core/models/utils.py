@@ -1,25 +1,38 @@
 import os
 import re
-import numpy as np
-import pandas as pd
 from datetime import datetime
+from typing import Dict, Optional, Sequence, Union
+
+import numpy as np
+from numpy.typing import NDArray
+import pandas as pd
+from pandas import Series
 from pyspark import SparkConf
+from pyspark.sql import DataFrame as SparkDataFrame
 from pyspark.sql import SparkSession, functions
+from pyspark.sql.column import Column
 from core.definitions import (
-    MATURITY_,
-    OPTIONALS_,
     DEFAULT_SEGMENTS_,
+    MATURITY_,
     NONDEFAULT_SEGMENTS_,
+    OPTIONALS_,
 )
 
+NumberLike = Union[float, int, NDArray[np.float_], Series]
 
-def generate_svo_flg(X):
+
+def generate_svo_flg(X: pd.DataFrame) -> pd.DataFrame:
     svo_flg = X.index == "2022-03-31"
     X["svo_flg"] = svo_flg.astype(float)
     return X
 
 
-def verify_data(X=None, features_cols=None, y=None, target_cols=None):
+def verify_data(
+    X: Optional[pd.DataFrame] = None,
+    features_cols: Optional[Sequence[str]] = None,
+    y: Optional[pd.DataFrame] = None,
+    target_cols: Optional[Sequence[str]] = None,
+) -> None:
     if X is not None:
         features_flag = all(np.isin(features_cols, X.columns))
         if not features_flag:
@@ -35,15 +48,17 @@ def dt_convert(dt: datetime) -> str:
     return "".join(str(dt.date()).split("-")[:2])
 
 
-def check_existence(path, name, overwrite=False):
+def check_existence(path: str, name: str, overwrite: bool = False) -> bool:
     return bool((~overwrite) & (name in os.listdir(path)))
 
 
-def sigmoid(x):
+def sigmoid(x: NumberLike) -> NumberLike:
     return 1 / (1 + np.exp(-x))
 
 
-def find_left_nearest_point(value, array, is_sorted=False):
+def find_left_nearest_point(
+    value: float, array: Sequence[float], is_sorted: bool = False
+) -> float:
     if not is_sorted:
         array = sorted(array)
     for x in array[::-1]:
@@ -52,7 +67,7 @@ def find_left_nearest_point(value, array, is_sorted=False):
     return array[0]
 
 
-def gen_opt_model_name(segment):
+def gen_opt_model_name(segment: Optional[str]) -> str:
     if segment is None:
         segment = "segment"
     elif segment not in ["mass", "priv", "svip", "bvip"]:
@@ -62,7 +77,7 @@ def gen_opt_model_name(segment):
     return f"opt_structure_{segment}"
 
 
-def gen_newbiz_model_name(segment):
+def gen_newbiz_model_name(segment: Optional[str]) -> str:
     if segment is None:
         segment = "segment"
     elif segment not in ["mass", "priv", "svip", "bvip"]:
@@ -73,7 +88,9 @@ def gen_newbiz_model_name(segment):
 
 
 # Функции для генерации имени модели для накопительных счетов
-def gen_sa_product_balance_model_name(product=None, segment=None):
+def gen_sa_product_balance_model_name(
+    product: Optional[str] = None, segment: Optional[str] = None
+) -> str:
     if product is None:
         product = "general"
     elif product not in ["classic", "kopilka", "general"]:
@@ -88,7 +105,7 @@ def gen_sa_product_balance_model_name(product=None, segment=None):
     return f"sa_{product}_avg_balance_{segment}"
 
 
-def gen_sa_product_structure_model_name(segment):
+def gen_sa_product_structure_model_name(segment: Optional[str]) -> str:
     if segment is None:
         segment = "segment"
     elif segment not in ["mass", "priv", "vip"]:
@@ -131,7 +148,7 @@ def run_spark_session(name: str = "session") -> SparkSession:
     return spark
 
 
-def dec_detect(col: str, col_type: str):
+def dec_detect(col: str, col_type: str) -> Column:
     dec_flag = col_type[:8] == "decimal("
     decint_flag = col_type[-3:] == ",0)"
     if dec_flag:
@@ -143,18 +160,18 @@ def dec_detect(col: str, col_type: str):
         return functions.col(col)
 
 
-def convert_decimals(spark_df):
+def convert_decimals(spark_df: SparkDataFrame) -> SparkDataFrame:
     select_expr = [dec_detect(c, t) for c, t in spark_df.dtypes]
     return spark_df.select(select_expr)
 
 
 def get_feature_name(
-    feature,
-    segment: str = None,
-    repl: int = None,
-    sub: int = None,
-    maturity: int = None,
-):
+    feature: str,
+    segment: Optional[str] = None,
+    repl: Optional[int] = None,
+    sub: Optional[int] = None,
+    maturity: Optional[int] = None,
+) -> str:
     if segment is not None:
         segment_part = f"_[{segment}]"
     else:
@@ -179,7 +196,9 @@ def get_feature_name(
     return f"{feature}{segment_part}{opt_part}{mat_part}"
 
 
-def get_sa_feature_name(feature, product, segment):
+def get_sa_feature_name(
+    feature: str, product: Optional[str], segment: Optional[str]
+) -> str:
     if product is not None:
         product_part = f"_[{product}]"
     else:
@@ -193,8 +212,11 @@ def get_sa_feature_name(feature, product, segment):
 
 
 def calculate_weighted_rates(
-    df: pd.DataFrame, segment: str = None, repl: int = None, sub: int = None
-):
+    df: pd.DataFrame,
+    segment: Optional[str] = None,
+    repl: Optional[int] = None,
+    sub: Optional[int] = None,
+) -> NDArray[np.float_]:
     if (repl is not None) and (sub is not None):
         rates = [
             get_feature_name("VTB_weighted_rate", segment, repl, sub, mat)
@@ -248,7 +270,12 @@ def calculate_weighted_rates(
             ).reshape(-1, 1)
 
 
-def calculate_max_rate(df, segment=None, repl=None, sub=None):
+def calculate_max_rate(
+    df: pd.DataFrame,
+    segment: Optional[str] = None,
+    repl: Optional[int] = None,
+    sub: Optional[int] = None,
+) -> NDArray[np.float_]:
     if (repl is not None) and (sub is not None):
         rates = [
             get_feature_name("VTB_weighted_rate", segment, repl, sub, mat)
@@ -274,7 +301,13 @@ def calculate_max_rate(df, segment=None, repl=None, sub=None):
         return df[rates].max(axis=1).values.reshape(-1, 1)
 
 
-def calculate_max_available_rate(df, segment, repl=None, sub=None, mat=None):
+def calculate_max_available_rate(
+    df: pd.DataFrame,
+    segment: str,
+    repl: Optional[int] = None,
+    sub: Optional[int] = None,
+    mat: Optional[int] = None,
+) -> NDArray[np.float_]:
     available_segments_map = {
         "mass": ["mass"],
         "priv": ["mass", "priv"],
@@ -315,7 +348,9 @@ def calculate_max_available_rate(df, segment, repl=None, sub=None, mat=None):
         return df[rates].max(axis=1).values.reshape(-1, 1)
 
 
-def calculate_weighted_ftp_rate(df: pd.DataFrame, segment: str = None):
+def calculate_weighted_ftp_rate(
+    df: pd.DataFrame, segment: Optional[str] = None
+) -> NDArray[np.float_]:
     if segment is not None:
         cur_rate = 0
         rates = [get_feature_name("VTB_ftp_rate", maturity=mat) for mat in MATURITY_]
@@ -336,8 +371,11 @@ def calculate_weighted_ftp_rate(df: pd.DataFrame, segment: str = None):
 
 
 def calculate_max_weighted_rate(
-    df: pd.DataFrame, segment: str = None, repl: int = None, sub: int = None
-):
+    df: pd.DataFrame,
+    segment: Optional[str] = None,
+    repl: Optional[int] = None,
+    sub: Optional[int] = None,
+) -> NDArray[np.float_]:
     if (repl is not None) and (sub is not None):
         return calculate_max_rate(df, segment, repl, sub)
     if (repl is not None) or (sub is not None):
@@ -367,7 +405,7 @@ def calculate_max_weighted_rate(
         )
 
 
-def calculate_absolute_inflows_default_segments(df):
+def calculate_absolute_inflows_default_segments(df: pd.DataFrame) -> pd.DataFrame:
     res = pd.DataFrame(index=df.index)
     for segment in DEFAULT_SEGMENTS_:
         y_inflow_abs = df.loc[:, [get_feature_name("y_inflow", segment)]].values
@@ -391,7 +429,7 @@ def calculate_absolute_inflows_default_segments(df):
 
 
 # Эту функцию я писал в состоянии полусмерти
-def calculate_absolute_inflows_nondefault_segments(df):
+def calculate_absolute_inflows_nondefault_segments(df: pd.DataFrame) -> pd.DataFrame:
     res = pd.DataFrame(index=df.index)
     res.loc[:, get_feature_name("y_inflow")] = df.loc[
         :, [get_feature_name("y_inflow", segment) for segment in NONDEFAULT_SEGMENTS_]
@@ -450,7 +488,9 @@ def calculate_absolute_inflows_nondefault_segments(df):
     return res
 
 
-def calculate_sa_model_features(df: pd.DataFrame, features):
+def calculate_sa_model_features(
+    df: pd.DataFrame, features: Sequence[str]
+) -> pd.DataFrame:
     sa_features_map = {
         "SA_weighted_rate_[general]": lambda segment: df.loc[
             :, "rate_sa_weighted"
@@ -491,14 +531,14 @@ def calculate_sa_model_features(df: pd.DataFrame, features):
 
 
 # для моделей долей по бакетам
-def gaussian_kernel(X, sigma):
+def gaussian_kernel(X: Sequence[float], sigma: float) -> float:
     distances = abs(X[0] - X[1])
     kernel_matrix = np.exp(-distances / (2 * sigma**2))
 
     return kernel_matrix
 
 
-def calc_model_bucket_share(spread=0):
+def calc_model_bucket_share(spread: float = 0) -> float:
     """
     считает перетоки между бакетами балагнса при изменении спреда. Возвращает долю которая перетечет в бакет выше
     spread - %, спред к ближайшему бакету
@@ -519,7 +559,12 @@ def calc_model_bucket_share(spread=0):
     return share
 
 
-def calc_new_shares(parse_res, BALANCE_BUCKETS, segment, features):
+def calc_new_shares(
+    parse_res: Dict[str, float],
+    BALANCE_BUCKETS: Sequence[str],
+    segment: str,
+    features: pd.DataFrame,
+) -> Dict[str, float]:
     """
     Функция считает доли по новому распределению
     """
@@ -544,7 +589,9 @@ def calc_new_shares(parse_res, BALANCE_BUCKETS, segment, features):
     return parse_res_new
 
 
-def parse_buckets_from_port(port, segment, balance_buckets):
+def parse_buckets_from_port(
+    port: pd.DataFrame, segment: str, balance_buckets: Sequence[str]
+) -> Dict[str, float]:
     """
     Функция которая парсит данные с портфеля
 

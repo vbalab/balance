@@ -1,8 +1,13 @@
-log_format_ = "%(asctime)s - [%(levelname)s] - %(name)s - %(filename)s.%(funcName)s:%(lineno)d - %(message)s"
+from __future__ import annotations
+
+from typing import Any, Dict
+
+
+log_format_: str = "%(asctime)s - [%(levelname)s] - %(name)s - %(filename)s.%(funcName)s:%(lineno)d - %(message)s"
 
 
 class Settings:
-    LOGGING_CONFIG = {
+    LOGGING_CONFIG: Dict[str, Any] = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {
