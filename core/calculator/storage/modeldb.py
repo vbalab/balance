@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import logging
-import pandas as pd
-from typing import Dict, List
-from datetime import datetime
 from collections import defaultdict
-from os.path import splitext, basename
+from datetime import datetime
+from os.path import basename, splitext
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
 from sqlalchemy import (
     Column,
     Integer,
@@ -16,7 +19,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, backref, sessionmaker
+from sqlalchemy.orm import backref, relationship, sessionmaker
 
 from core.calculator.core.settings import Settings
 
@@ -40,10 +43,18 @@ class ModelInfoEntity(Base):
     saved_at = Column(DateTime)
     git_url = Column(String)
 
-    trained_models = relationship("TrainedModelEntity", backref=backref("model_info"))
-    portfolios = relationship("PortfolioEntity", backref=backref("model_info"))
-    prediction_data = relationship("PredictionEntity", backref=backref("model_info"))
-    ground_truth = relationship("GroundTruthEntity", backref=backref("model_info"))
+    trained_models: List["TrainedModelEntity"] = relationship(
+        "TrainedModelEntity", backref=backref("model_info")
+    )
+    portfolios: List["PortfolioEntity"] = relationship(
+        "PortfolioEntity", backref=backref("model_info")
+    )
+    prediction_data: List["PredictionEntity"] = relationship(
+        "PredictionEntity", backref=backref("model_info")
+    )
+    ground_truth: List["GroundTruthEntity"] = relationship(
+        "GroundTruthEntity", backref=backref("model_info")
+    )
 
     def __repr__(self) -> str:
         return f"id = {self.model_info_id} {self.name}"
@@ -96,7 +107,7 @@ class PredictionEntity(Base):
     start_dt = Column(DateTime)
     end_dt = Column(DateTime)
 
-    prediction_data = relationship(
+    prediction_data: List["PredictionDataEntity"] = relationship(
         "PredictionDataEntity", backref=backref("prediction")
     )
 
@@ -138,7 +149,9 @@ class PortfolioEntity(Base):
     )
     portfolio_dt = Column(DateTime)
 
-    portfolio_data = relationship("PortfolioDataEntity", backref=backref("portfolio"))
+    portfolio_data: List["PortfolioDataEntity"] = relationship(
+        "PortfolioDataEntity", backref=backref("portfolio")
+    )
 
     UniqueConstraint(
         "model_info_id",
@@ -177,7 +190,7 @@ class GroundTruthEntity(Base):
     start_dt = Column(DateTime)
     end_dt = Column(DateTime)
 
-    ground_truth_data = relationship(
+    ground_truth_data: List["GroundTruthDataEntity"] = relationship(
         "GroundTruthDataEntity", backref=backref("ground_truth")
     )
 
@@ -210,7 +223,9 @@ class BackTestInfoEntity(Base):
     calc_type = Column(String)
     tag = Column(String)
 
-    backtest_data = relationship("BackTestDataEntity", backref=backref("backtest_info"))
+    backtest_data: List["BackTestDataEntity"] = relationship(
+        "BackTestDataEntity", backref=backref("backtest_info")
+    )
 
     def __str__(self) -> str:
         return f'{self.calculator}_first_train={self.first_train_dt.strftime("%Y-%m")}_steps={self.steps}_h={self.horizon}'
@@ -219,7 +234,7 @@ class BackTestInfoEntity(Base):
         return f"id = {self.backtest_info_id} {self.__str__()}"
 
     @property
-    def calculated_data(self):
+    def calculated_data(self) -> pd.DataFrame:
         df: pd.DataFrame = pd.DataFrame.from_records(
             [bd.asdict for bd in self.backtest_data]
         )
@@ -247,12 +262,12 @@ class BackTestDataEntity(Base):
     tag = Column(String)
 
     @property
-    def asdict(self):
+    def asdict(self) -> Dict[str, Any]:
         return {k: v for k, v in self.__dict__.items() if k != "_sa_instance_state"}
 
 
 class ModelDB:
-    def __init__(self, db_url: str):
+    def __init__(self, db_url: str) -> None:
         self._db_url: str = db_url
         self._db_engine = create_engine(db_url)
         self._session_maker = sessionmaker()
@@ -267,8 +282,8 @@ class ModelDB:
             rs = rs.filter(ModelInfoEntity.name.like(f"%{model_filter}%")).all()
         return [c for c in rs]
 
-    def find_model(self, model_name: str) -> ModelInfoEntity:
-        entity: ModelInfoEntity = None
+    def find_model(self, model_name: str) -> Optional[ModelInfoEntity]:
+        entity: Optional[ModelInfoEntity] = None
         rs = self._db_session.query(ModelInfoEntity).filter(
             ModelInfoEntity.name == model_name
         )
@@ -279,14 +294,14 @@ class ModelDB:
         return entity
 
     def delete_model(self, model_name: str) -> bool:
-        entity: ModelInfoEntity = self.find_model(model_name)
+        entity: Optional[ModelInfoEntity] = self.find_model(model_name)
         return self._delete_entity(entity)
 
     def delete_trained_models(self, file_name: str) -> bool:
-        entity: TrainedModelEntity = self.find_trained_model(file_name)
+        entity: Optional[TrainedModelEntity] = self.find_trained_model(file_name)
         return self._delete_entity(entity)
 
-    def _delete_entity(self, entity: Base) -> bool:
+    def _delete_entity(self, entity: Optional[Base]) -> bool:
         rs: bool = False
         if entity:
             try:
@@ -304,8 +319,8 @@ class ModelDB:
             for e in rs:
                 self._delete_entity(e)
 
-    def find_trained_model(self, file_name: str) -> TrainedModelEntity:
-        entity: TrainedModelEntity = None
+    def find_trained_model(self, file_name: str) -> Optional[TrainedModelEntity]:
+        entity: Optional[TrainedModelEntity] = None
         rs = self._db_session.query(TrainedModelEntity).filter(
             TrainedModelEntity.file_name == file_name
         )
@@ -326,11 +341,9 @@ class ModelDB:
     ####
 
     def find_trained_model_by_dt(
-        self,
-        model_name: str,
-        end_dt: datetime,
-    ) -> TrainedModelEntity:
-        entity: TrainedModelEntity = None
+        self, model_name: str, end_dt: datetime
+    ) -> Optional[TrainedModelEntity]:
+        entity: Optional[TrainedModelEntity] = None
         x_dt = end_dt.replace(day=1)
         rs = (
             self._db_session.query(TrainedModelEntity)
@@ -348,9 +361,7 @@ class ModelDB:
         return entity
 
     def find_trained_model_by_dt1(
-        self,
-        end_dt: datetime,
-        model_name: str = "",
+        self, end_dt: datetime, model_name: str = ""
     ) -> List[TrainedModelEntity]:
         x_dt = end_dt.replace(day=1)
         rs = (
@@ -396,7 +407,7 @@ class ModelDB:
 
     def update_trained_model(self, e: TrainedModelEntity) -> None:
         res: bool = False
-        existing_: TrainedModelEntity = self.find_trained_model(e.file_name)
+        existing_: Optional[TrainedModelEntity] = self.find_trained_model(e.file_name)
 
         if existing_:
             existing_.file_name = e.file_name
@@ -422,7 +433,7 @@ class ModelDB:
         res: bool = False
         if create_model_info:
             self.save_model_info(model_name)
-        model_info_: ModelInfoEntity = self.find_model(model_name)
+        model_info_: Optional[ModelInfoEntity] = self.find_model(model_name)
         if model_info_:
             try:
                 model_info_.trained_models.extend(trained_models)
@@ -455,7 +466,7 @@ class ModelDB:
 
     def save_trained_models(
         self, trained_models: List[str], create_model_info: bool = True
-    ) -> bool:
+    ) -> Dict[str, bool]:
         models: Dict[str, List[TrainedModelEntity]] = defaultdict(list)
         for f_ in trained_models:
             fname_: str = splitext(f_)[0]
@@ -474,13 +485,17 @@ class ModelDB:
             for p in models
         }
 
-    def find_prediction_data(self, name: str, from_dt: datetime, to: datetime):
+    def find_prediction_data(
+        self, name: str, from_dt: datetime, to: datetime
+    ) -> None:
         pass
 
-    def find_portfolio(self, name: str, portfolio_dt: datetime):
+    def find_portfolio(self, name: str, portfolio_dt: datetime) -> None:
         pass
 
-    def find_ground_truth(self, name: str, from_dt: datetime, to: datetime):
+    def find_ground_truth(
+        self, name: str, from_dt: datetime, to: datetime
+    ) -> None:
         pass
 
     def save_backtest(self, backtest_info: BackTestInfoEntity) -> bool:
@@ -503,9 +518,12 @@ class ModelDB:
         return [c for c in rs]
 
     def save_portfolio(
-        name: str, portfolio_dt: datetime, portfolio_data: Dict[str, pd.DataFrame]
-    ):
-        folio_entity = None
+        self,
+        name: str,
+        portfolio_dt: datetime,
+        portfolio_data: Dict[str, pd.DataFrame],
+    ) -> None:
+        folio_entity: Optional[PortfolioEntity] = None
         rs = (
             self._db_session.query(PortfolioEntity)
             .filter(PortfolioEntity.model_info.has(ModelInfoEntity.name == name))
@@ -534,7 +552,7 @@ class ModelDB:
                 logger.error(e)
 
 
-def init_engine(db_url):
+def init_engine(db_url: str) -> Tuple[Any, Any]:
     db_engine = create_engine(db_url)
     session_maker = sessionmaker()
     session_maker.configure(bind=db_engine)
