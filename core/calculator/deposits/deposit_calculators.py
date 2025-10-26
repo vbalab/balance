@@ -1,6 +1,8 @@
-from enum import auto
+from __future__ import annotations
 
-from typing import Dict
+from enum import auto
+from typing import Dict, Optional
+
 import pandas as pd
 
 from upfm.commons import ModelInfo, BaseModel
@@ -30,7 +32,7 @@ class DepositNewbusinessCalculator(AbstractCalculator):
         model_register: ModelRegister,
         models: Dict[str, ModelInfo],
         scenario: pd.DataFrame,
-        model_data: Dict[str, pd.DataFrame] = None,
+        model_data: Optional[Dict[str, pd.DataFrame]] = None,
     ) -> None:
         super().__init__(model_register, models, scenario, model_data)
         self.outflow_plan_model: BaseModel = model_register.get_model(
@@ -180,7 +182,7 @@ class DepositNewbusinessCalculator(AbstractCalculator):
         self._forecast_context.model_data[newbusiness_model_key] = newbusiness
         return newbusiness
 
-    def calculate_early_redemption(self):
+    def calculate_early_redemption(self) -> Dict[str, Dict[str, pd.DataFrame]]:
         early_redemption_model_key = "EARLY_REDEMPTION"
         early_redemption_portfolio_key = "ER_PORTFOLIO"
         early_redemption_noopt_res: Dict[str, pd.DataFrame] = (
@@ -226,7 +228,7 @@ class DepositNewbusinessCalculator(AbstractCalculator):
         )
         return early_redemption
 
-    def calculate_renewal(self):
+    def calculate_renewal(self) -> pd.DataFrame:
         renewal_model_key = "RENEWAL"
         renewal_res = self.renewal_model.predict(self._forecast_context)
         self._forecast_context.model_data[renewal_model_key] = renewal_res

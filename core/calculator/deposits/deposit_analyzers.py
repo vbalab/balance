@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import logging
+from typing import Any, Dict, List, Tuple, Union
+
 import pandas as pd
 import plotly.express as px
-from typing import Any, Dict
-from pyspark.sql import SparkSession
+from plotly.graph_objs import Figure
 from plotly.subplots import make_subplots
+from pyspark.sql import SparkSession
 
 from core.upfm.commons import _REPORT_DT_COLUMN
 from core.calculator.core import (
@@ -32,23 +36,29 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
 
     def __init__(
         self,
-        spark: SparkSession = None,
+        spark: SparkSession | None = None,
         metrics: Dict[str, Any] = BASIC_METRICS,
-    ):
+    ) -> None:
         self._spark = spark
         self._metrics = metrics
 
-    def _fcst_extractor(self, engine: AbstractEngine, fcst_path, backtest_step):
+    def _fcst_extractor(
+        self, engine: AbstractEngine, fcst_path: Tuple[str, str], backtest_step: int
+    ) -> pd.DataFrame:
         return (
             engine.calc_results[backtest_step]
             .calculated_data[fcst_path[0]][[_REPORT_DT_COLUMN, fcst_path[1]]]
             .rename(columns={fcst_path[1]: "pred"})
         )
 
-    def _ground_truth_extractor(self, engine: AbstractEngine, step: int, tag: str):
+    def _ground_truth_extractor(
+        self, engine: AbstractEngine, step: int, tag: str
+    ) -> pd.DataFrame:
         return engine.ground_truth[step][tag]["target"]
 
-    def _pred_values_extractor(self, engine: AbstractEngine, step: int, tag: str):
+    def _pred_values_extractor(
+        self, engine: AbstractEngine, step: int, tag: str
+    ) -> Union[pd.DataFrame, pd.Series]:
         if tag.startswith("deposit_earlyredemption"):
             model = engine.register.get_model(engine.trained_models[(step, tag)])
             target_col = "SER_d_cl"
@@ -74,7 +84,9 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
 
         return model_data.loc[:, target]
 
-    def _results_in_sample_extractor(self, engine: AbstractEngine, step: int, tag: str):
+    def _results_in_sample_extractor(
+        self, engine: AbstractEngine, step: int, tag: str
+    ) -> Tuple[Union[pd.DataFrame, pd.Series], Union[pd.DataFrame, pd.Series]]:
         """
         Возвращает результат работы модели на тренировочных данных (in sample)
         """
@@ -122,7 +134,7 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
 
         return truth, pred
 
-    def _get_model_ground_truth(self, engine: AbstractEngine, tag):
+    def _get_model_ground_truth(self, engine: AbstractEngine, tag: str) -> pd.DataFrame:
         return pd.concat(
             [
                 self._ground_truth_extractor(
@@ -132,7 +144,7 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
             ]
         )
 
-    def _get_model_pred_values(self, engine: AbstractEngine, tag):
+    def _get_model_pred_values(self, engine: AbstractEngine, tag: str) -> pd.DataFrame:
         return pd.concat(
             [
                 self._pred_values_extractor(
@@ -142,7 +154,12 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
             ]
         )
 
-    def _apply_metric(self, pred, truth, metric_name):
+    def _apply_metric(
+        self,
+        pred: Union[pd.DataFrame, pd.Series],
+        truth: Union[pd.DataFrame, pd.Series],
+        metric_name: str,
+    ) -> Any:
         try:
             return self._metrics[metric_name](pred, truth)
         except:
@@ -150,13 +167,15 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
                 f"Metric `{metric_name}` does not support this input format of data"
             )
 
-    def _apply_metrics(self, pred, truth) -> Dict[str, Any]:
+    def _apply_metrics(
+        self, pred: Union[pd.DataFrame, pd.Series], truth: Union[pd.DataFrame, pd.Series]
+    ) -> Dict[str, Any]:
         return {
             metric_name: self._apply_metric(pred, truth, metric_name)
             for metric_name in self._metrics.keys()
         }
 
-    def get_model_metrics(self, engine: AbstractEngine, tag: str):
+    def get_model_metrics(self, engine: AbstractEngine, tag: str) -> pd.DataFrame:
         metrics_data = []
         pred_all_steps = []
         truth_all_steps = []
@@ -192,22 +211,28 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
 
         return pd.DataFrame(metrics_data)
 
-    def get_metrics(self, engine: AbstractEngine):
+    def get_metrics(self, engine: AbstractEngine) -> pd.DataFrame:
         raise NotImplementedError("Use `get_model_metrics`")
 
-    def _get_product_name(self, fcst_path, trth_path):
+    def _get_product_name(
+        self, fcst_path: Tuple[str, str], trth_path: Tuple[str, str]
+    ) -> str:
         return fcst_path[0]
 
-    def _get_chart_name(self, fcst_path, trth_path):
+    def _get_chart_name(
+        self, fcst_path: Tuple[str, str], trth_path: Tuple[str, str]
+    ) -> str:
         return "_".join(fcst_path)
 
     @staticmethod
-    def _plot_single_chart_data(data, plot_method="line", **kwargs):
-        fig = getattr(px, plot_method)(data, **kwargs)
+    def _plot_single_chart_data(
+        data: pd.DataFrame, plot_method: str = "line", **kwargs: Any
+    ) -> Figure:
+        fig: Figure = getattr(px, plot_method)(data, **kwargs)
 
         return fig
 
-    def get_chart_data(self, engine: AbstractEngine, tag: str):
+    def get_chart_data(self, engine: AbstractEngine, tag: str) -> Figure:
         num_steps = engine._config.steps
         pred = pd.concat(
             [
@@ -229,11 +254,11 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
         self,
         engineengine: AbstractEngine,
         tag: str,
-        add_in_sample=False,
-        vertical_spacing=0.15,
-        height=300,
+        add_in_sample: bool = False,
+        vertical_spacing: float = 0.15,
+        height: int = 300,
         **kwargs,
-    ):
+    ) -> Union[Figure, List[Figure]]:
         if add_in_sample:
             fig_list = []
             fig = make_subplots(
@@ -388,11 +413,13 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
 
 # Неактуальные на данный момент классы
 class DepositAnalyzer(SimpleCalculatorAnalyzer):
-    def __init__(self):
+    def __init__(self) -> None:
         path_dict = {"Deposits": "Deposits"}
         super().__init__(path_dict)
 
-    def _fcst_extractor(self, engine, fcst_col, backtest_step):
+    def _fcst_extractor(
+        self, engine: AbstractEngine, fcst_col: str, backtest_step: int
+    ) -> pd.DataFrame:
         df = engine._calc_results[backtest_step].calculated_data["RetailDeposits"][
             "RENEWAL"
         ]["final_portfolio"]
@@ -402,7 +429,9 @@ class DepositAnalyzer(SimpleCalculatorAnalyzer):
         df.columns = ["report_dt", "pred"]
         return df
 
-    def _ground_truth_extractor(self, engine, trth_col, backtest_step):
+    def _ground_truth_extractor(
+        self, engine: AbstractEngine, trth_col: str, backtest_step: int
+    ) -> pd.DataFrame:
         noopt_df = (
             engine.ground_truth[
                 (backtest_step, "deposit_earlyredemption_noopt_vip_novip_RUR")
@@ -423,15 +452,17 @@ class DepositAnalyzer(SimpleCalculatorAnalyzer):
         df.columns = ["report_dt", "truth"]
         return df
 
-    def _get_product_name(self, fcst_col, trth_col):
+    def _get_product_name(self, fcst_col: str, trth_col: str) -> str:
         return "deposits_portfolio"
 
-    def _get_chart_name(self, fcst_path, trth_path):
+    def _get_chart_name(
+        self, fcst_path: Tuple[str, str], trth_path: Tuple[str, str]
+    ) -> str:
         return "Прогноз портфеля депозитов"
 
 
 class NewbusinessAnalyzer(SimpleCalculatorAnalyzer):
-    def __init__(self):
+    def __init__(self) -> None:
         path_dict = {
             "NOVIP_NOOPT": "novip_noopt",
             "NOVIP_OPT": "novip_opt",
@@ -440,7 +471,9 @@ class NewbusinessAnalyzer(SimpleCalculatorAnalyzer):
         }
         super().__init__(path_dict)
 
-    def _fcst_extractor(self, engine, fcst_path, backtest_step):
+    def _fcst_extractor(
+        self, engine: AbstractEngine, fcst_path: str, backtest_step: int
+    ) -> pd.DataFrame:
         df = (
             engine.calc_results[backtest_step]
             .calculated_data["RetailDeposits"]["NEWBUSINESS"][fcst_path]
@@ -449,24 +482,26 @@ class NewbusinessAnalyzer(SimpleCalculatorAnalyzer):
         df.columns = ["report_dt", "pred"]
         return df
 
-    def _ground_truth_extractor(self, engine, trth_path, backtest_step):
+    def _ground_truth_extractor(
+        self, engine: AbstractEngine, trth_path: str, backtest_step: int
+    ) -> pd.DataFrame:
         df = engine.ground_truth[(backtest_step, f"deposits_newbusiness_{trth_path}")][
             "target"
         ].reset_index()
         df.columns = ["report_dt", "truth"]
         return df
 
-    def _get_product_name(self, fcst_path, trth_path):
+    def _get_product_name(self, fcst_path: str, trth_path: str) -> str:
         return f"deposits_newbusiness_{trth_path}"
 
-    def _get_chart_name(self, fcst_path, trth_path):
+    def _get_chart_name(self, fcst_path: str, trth_path: str) -> str:
         opt_dict = {"OPT": "опциональным", "NOOPT": "безопциональным"}
         # seg_dict = {'VIP': 'текущий портфель', 'NOVIP': 'новый бизнес'}
         return f"Прогноз нового бизнеса в сегменте {fcst_path.split('_')[0]} по {opt_dict[fcst_path.split('_')[1]]} вкладам"
 
 
 class EarlyRedemptionAnalyzer(SimpleCalculatorAnalyzer):
-    def __init__(self):
+    def __init__(self) -> None:
         path_dict = {
             ("NOOPT", "current_portfolio_agg"): (
                 "deposit_earlyredemption_noopt_vip_novip_RUR",
@@ -487,7 +522,9 @@ class EarlyRedemptionAnalyzer(SimpleCalculatorAnalyzer):
         }
         super().__init__(path_dict)
 
-    def _fcst_extractor(self, engine, fcst_path, backtest_step):
+    def _fcst_extractor(
+        self, engine: AbstractEngine, fcst_path: Tuple[str, str], backtest_step: int
+    ) -> pd.DataFrame:
         # [RetailDepositsCalculationType.RetailDeposits.name]['EARLY_REDEMPTION']['NOOPT']['newbiz_portfolio']
 
         return (
@@ -501,7 +538,9 @@ class EarlyRedemptionAnalyzer(SimpleCalculatorAnalyzer):
             .rename(columns={"SER_d_cl": "pred"})
         )
 
-    def _ground_truth_extractor(self, engine, trth_path, backtest_step):
+    def _ground_truth_extractor(
+        self, engine: AbstractEngine, trth_path: Tuple[str, str], backtest_step: int
+    ) -> pd.DataFrame:
         # ('deposit_earlyredemption_noopt_vip_novip_RUR', 'report_dt', 'SER_d')
         return (
             engine.ground_truth[(backtest_step, trth_path[0])]["target"]
@@ -511,10 +550,14 @@ class EarlyRedemptionAnalyzer(SimpleCalculatorAnalyzer):
             .rename(columns={"SER_d_cl": "truth"})
         )
 
-    def _get_product_name(self, fcst_path, trth_path):
+    def _get_product_name(
+        self, fcst_path: Tuple[str, str], trth_path: Tuple[str, str]
+    ) -> str:
         return f"{fcst_path[0]}_{fcst_path[1][:-4]}"
 
-    def _get_chart_name(self, fcst_path, trth_path):
+    def _get_chart_name(
+        self, fcst_path: Tuple[str, str], trth_path: Tuple[str, str]
+    ) -> str:
         opt_dict = {"OPT": "опциональным", "NOOPT": "безопциональным"}
         new_dict = {
             "current_portfolio_agg": "текущий портфель",
@@ -524,13 +567,15 @@ class EarlyRedemptionAnalyzer(SimpleCalculatorAnalyzer):
 
 
 class ReactionAnalyzer(SimpleCalculatorAnalyzer):
-    def __init__(self):
+    def __init__(self) -> None:
         path_dict = {"SBER_RATE": "sber_rate", "NO_SBER_RATE": "no_sber_rate"}
         self.denominator = 1
         self.units = "Ставка, %"
         super().__init__(path_dict)
 
-    def _fcst_extractor(self, engine, fcst_path, backtest_step):
+    def _fcst_extractor(
+        self, engine: AbstractEngine, fcst_path: str, backtest_step: int
+    ) -> pd.DataFrame:
         return (
             engine.calc_results[backtest_step]
             .calculated_data["RetailDeposits"]["COMPETITOR_RATES"][
@@ -539,20 +584,22 @@ class ReactionAnalyzer(SimpleCalculatorAnalyzer):
             .rename(columns={fcst_path: "pred"})
         )
 
-    def _ground_truth_extractor(self, engine, trth_path, backtest_step):
+    def _ground_truth_extractor(
+        self, engine: AbstractEngine, trth_path: str, backtest_step: int
+    ) -> pd.DataFrame:
         return engine.ground_truth[(backtest_step, "deposits_reactionrur_sarimax_v1")][
             "target"
         ][["report_dt", trth_path]].rename(columns={trth_path: "truth"})
 
-    def _get_product_name(self, fcst_col, trth_col):
+    def _get_product_name(self, fcst_col: str, trth_col: str) -> str:
         return f"{fcst_col[:-5]}_reaction"
 
-    def _get_chart_name(self, fcst_path, trth_path):
+    def _get_chart_name(self, fcst_path: str, trth_path: str) -> str:
         return f"Прогноз индекса ставок {fcst_path}"
 
 
 class MaturityStructureAnalyzer(SimpleCalculatorAnalyzer):
-    def __init__(self):
+    def __init__(self) -> None:
         path_dict = {
             "NOVIP_NOOPT": "novip_noopt",
             "NOVIP_OPT": "novip_opt",
@@ -564,7 +611,9 @@ class MaturityStructureAnalyzer(SimpleCalculatorAnalyzer):
         self.terms = [3, 6, 12, 18, 24, 36, 37]
         super().__init__(path_dict)
 
-    def _fcst_extractor(self, engine, fcst_path, backtest_step):
+    def _fcst_extractor(
+        self, engine: AbstractEngine, fcst_path: str, backtest_step: int
+    ) -> pd.DataFrame:
         df = engine.calc_results[backtest_step].calculated_data["RetailDeposits"][
             "MATURITY_STRUCTURE"
         ][fcst_path]
@@ -574,7 +623,9 @@ class MaturityStructureAnalyzer(SimpleCalculatorAnalyzer):
         weighted_maturity.columns = ["report_dt", "pred"]
         return weighted_maturity
 
-    def _ground_truth_extractor(self, engine, trth_path, backtest_step):
+    def _ground_truth_extractor(
+        self, engine: AbstractEngine, trth_path: str, backtest_step: int
+    ) -> pd.DataFrame:
         df = engine.ground_truth[
             (backtest_step, f"deposits_maturity_structure_{trth_path}")
         ]["target"].fillna(0)
@@ -584,17 +635,17 @@ class MaturityStructureAnalyzer(SimpleCalculatorAnalyzer):
         weighted_maturity.columns = ["report_dt", "truth"]
         return weighted_maturity
 
-    def _get_product_name(self, fcst_path, trth_path):
+    def _get_product_name(self, fcst_path: str, trth_path: str) -> str:
         return f"deposits_maturity_structure_{trth_path}"
 
-    def _get_chart_name(self, fcst_path, trth_path):
+    def _get_chart_name(self, fcst_path: str, trth_path: str) -> str:
         opt_dict = {"OPT": "опциональным", "NOOPT": "безопциональным"}
         # seg_dict = {'VIP': 'текущий портфель', 'NOVIP': 'новый бизнес'}
         return f"Прогноз средневзвешенной срочности нового бизнеса в сегменте {fcst_path.split('_')[0]} по {opt_dict[fcst_path.split('_')[1]]} вкладам"
 
 
 class DepositComponentAnalyzer(SimpleCalculatorAnalyzer):
-    def __init__(self):
+    def __init__(self) -> None:
         path_dict = {
             "NOVIP_NOOPT": "NOVIP_NOOPT",
             "NOVIP_OPT": "NOVIP_OPT",
@@ -605,7 +656,9 @@ class DepositComponentAnalyzer(SimpleCalculatorAnalyzer):
         self.opt_map = {"OPT": ">0", "NOOPT": "==0"}
         super().__init__(path_dict)
 
-    def _fcst_extractor(self, engine, fcst_path, backtest_step):
+    def _fcst_extractor(
+        self, engine: AbstractEngine, fcst_path: str, backtest_step: int
+    ) -> pd.DataFrame:
         vip, opt = fcst_path.split("_")
         df = (
             engine._calc_results[backtest_step]
@@ -619,7 +672,9 @@ class DepositComponentAnalyzer(SimpleCalculatorAnalyzer):
         df.columns = ["report_dt", "pred"]
         return df
 
-    def _ground_truth_extractor(self, engine, trth_path, backtest_step):
+    def _ground_truth_extractor(
+        self, engine: AbstractEngine, trth_path: str, backtest_step: int
+    ) -> pd.DataFrame:
         vip, opt = trth_path.split("_")
         if opt == "NOOPT":
             df = (
@@ -651,8 +706,8 @@ class DepositComponentAnalyzer(SimpleCalculatorAnalyzer):
         df.columns = ["report_dt", "truth"]
         return df
 
-    def _get_product_name(self, fcst_path, trth_col):
+    def _get_product_name(self, fcst_path: str, trth_col: str) -> str:
         return f"deposits_portfolio_{fcst_path.lower()}"
 
-    def _get_chart_name(self, fcst_path, trth_path):
+    def _get_chart_name(self, fcst_path: str, trth_path: str) -> str:
         return f"Прогноз портфеля депозитов в сегменте {fcst_path}"

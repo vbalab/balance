@@ -1,9 +1,12 @@
+from __future__ import annotations
+
+from datetime import datetime
+from enum import auto
+from functools import reduce
+from typing import Dict, List, Optional, Sequence, Tuple
+
 import numpy as np
 import pandas as pd
-from enum import auto
-from typing import Dict
-from functools import reduce
-from datetime import datetime
 from pandas.tseries.offsets import MonthEnd
 
 from core.upfm.commons import (
@@ -181,7 +184,7 @@ class DepositIterativeCalculator(AbstractCalculator):
         model_register: ModelRegister,
         models: Dict[str, ModelInfo],
         scenario: Scenario,
-        model_data: Dict[str, pd.DataFrame] = None,
+        model_data: Optional[Dict[str, pd.DataFrame]] = None,
     ) -> None:
         super().__init__(model_register, models, scenario, model_data)
 
@@ -195,12 +198,12 @@ class DepositIterativeCalculator(AbstractCalculator):
         self._set_early_withdrawal_models()
         self._set_current_accounts_models()
 
-    def _set_renewal_model(self):
+    def _set_renewal_model(self) -> None:
         self.renewal_model: BaseModel = self._model_register.get_model(
             self._models[Renewal.model_name]
         )
 
-    def _set_plan_close_model(self):
+    def _set_plan_close_model(self) -> None:
         self.plan_close_model: BaseModel = self._model_register.get_model(
             self._models[PlanClose.model_name]
         )
@@ -208,7 +211,7 @@ class DepositIterativeCalculator(AbstractCalculator):
     # Переписать сеттеры моделей - много дублирования кода (может как-то через дескрипторы сделать??)
     def _set_maturity_structure_model_by_params(
         self, segment: str, repl: int, sub: int
-    ):
+    ) -> None:
         model_name: str = MaturityStructure.get_model_by_conditions(
             segment=segment, replenishable_flg=repl, subtraction_flg=sub
         ).model_name
@@ -218,7 +221,9 @@ class DepositIterativeCalculator(AbstractCalculator):
             self._model_register.get_model(model_info)
         )
 
-    def _set_early_withdrawal_model_by_params(self, segment: str, repl: int, sub: int):
+    def _set_early_withdrawal_model_by_params(
+        self, segment: str, repl: int, sub: int
+    ) -> None:
         model_name: str = EarlyWithdrawal.get_model_by_conditions(
             segment=segment, replenishable_flg=repl, subtraction_flg=sub
         ).model_name
@@ -228,20 +233,20 @@ class DepositIterativeCalculator(AbstractCalculator):
             self._model_register.get_model(model_info)
         )
 
-    def _set_early_withdrawal_models(self):
+    def _set_early_withdrawal_models(self) -> None:
         self.early_withdrawal_models: Dict[Tuple[str, int, int], BaseModel] = {}
         for segment in DEFAULT_SEGMENTS_:
             for repl, sub in OPTIONALS_:
                 self._set_early_withdrawal_model_by_params(segment, repl, sub)
 
-    def _set_maturity_structure_models(self):
+    def _set_maturity_structure_models(self) -> None:
         self.maturity_structure_models: Dict[Tuple[str, int, int], BaseModel] = {}
         for segment in DEFAULT_SEGMENTS_:
             for repl, sub in OPTIONALS_:
                 self._set_maturity_structure_model_by_params(segment, repl, sub)
 
-    def _set_balance_structure_models(self):
-        self.balance_structure_models: Dict[Tuple[str, int, int], BaseModel] = {}
+    def _set_balance_structure_models(self) -> None:
+        self.balance_structure_models: Dict[str, BaseModel] = {}
         for segment in DEFAULT_SEGMENTS_:
             model_name: str = NewbusinessBuckets.get_model_by_conditions(
                 segment=segment
@@ -251,7 +256,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                 model_info
             )
 
-    def _set_opt_structure_models(self):
+    def _set_opt_structure_models(self) -> None:
         self.opt_structure_models: Dict[str, BaseModel] = {}
         for segment in NONDEFAULT_SEGMENTS_:
             model_name: str = OptStructure.get_model_by_conditions(
@@ -262,7 +267,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                 model_info
             )
 
-    def _set_newbusiness_models(self):
+    def _set_newbusiness_models(self) -> None:
         self.newbusiness_models: Dict[str, BaseModel] = {}
         for segment in NONDEFAULT_SEGMENTS_:
             model_name: str = Newbusiness.get_model_by_conditions(
@@ -273,7 +278,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                 model_info
             )
 
-    def _set_saving_accounts_models(self):
+    def _set_saving_accounts_models(self) -> None:
         self.saving_accounts_models: Dict[str, Dict[str, BaseModel]] = {}
         for sa_model in SaModels.models:
             model_name: str = sa_model.model_name
@@ -284,7 +289,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                 sa_model.model_trainer.prediction_type
             ] = self._model_register.get_model(model_info)
 
-    def _set_current_accounts_models(self):
+    def _set_current_accounts_models(self) -> None:
         self.current_accounts_models: Dict[str, BaseModel] = {}
         for ca_model in CurrentAccounts.models:
             model_name: str = ca_model.model_name
@@ -293,7 +298,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                 self._model_register.get_model(model_info)
             )
 
-    def _add_scenario_to_model_data(self, forecast_date):
+    def _add_scenario_to_model_data(self, forecast_date: datetime) -> None:
         scenario_cols = self._scenario.scenario_data.columns
         self._forecast_context.model_data["features"].loc[
             forecast_date, scenario_cols
@@ -301,13 +306,19 @@ class DepositIterativeCalculator(AbstractCalculator):
 
     def _add_predictions_to_model_data(
         self, prediction_df: pd.DataFrame, forecast_date: datetime
-    ):
+    ) -> None:
         cols = prediction_df.columns
         self._forecast_context.model_data["features"].loc[forecast_date, cols] = (
             prediction_df.loc[forecast_date, :]
         )
 
-    def _add_weighted_rates(self, forecast_date, segment=None, repl=None, sub=None):
+    def _add_weighted_rates(
+        self,
+        forecast_date: datetime,
+        segment: Optional[str] = None,
+        repl: Optional[int] = None,
+        sub: Optional[int] = None,
+    ) -> None:
         df_date = self._forecast_context.model_data["features"].loc[[forecast_date], :]
         weighted_rate = calculate_weighted_rates(df_date, segment, repl, sub)
         feature_name = get_feature_name("VTB_weighted_rate", segment, repl, sub)
@@ -315,14 +326,14 @@ class DepositIterativeCalculator(AbstractCalculator):
             [forecast_date], feature_name
         ] = weighted_rate
 
-    def _calculate_absolute_inflows(self, forecast_date):
+    def _calculate_absolute_inflows(self, forecast_date: datetime) -> None:
         df_date = self._forecast_context.model_data["features"].loc[[forecast_date], :]
         res = calculate_absolute_inflows_nondefault_segments(df_date)
         self._forecast_context.model_data["features"].loc[
             [forecast_date], res.columns
         ] = res
 
-    def calculate_renewal(self, forecast_date):
+    def calculate_renewal(self, forecast_date: datetime) -> None:
         # При прогнозе в дату forecast_date берем портфель на предыдущую дату
         # (Предыдущая дата лежит в subcontext.portfolio_dt)
         # Делаем прогноз пролонгаций и кладем портфель со столбцом прогнозов обратно
@@ -334,14 +345,14 @@ class DepositIterativeCalculator(AbstractCalculator):
             subcontext.portfolio_dt
         ] = portf_with_renewals
 
-    def calculate_plan_close(self, forecast_date) -> pd.DataFrame:
+    def calculate_plan_close(self, forecast_date: datetime) -> pd.DataFrame:
         outflows: pd.DataFrame = self.plan_close_model.predict(
             self._forecast_context.subcontext(forecast_date)
         )
         self._add_predictions_to_model_data(outflows, forecast_date)
         return outflows
 
-    def calculate_balance_structure(self, forecast_date):
+    def calculate_balance_structure(self, forecast_date: datetime) -> None:
         for segment in DEFAULT_SEGMENTS_:
             model_ = self.balance_structure_models[segment]
             balance_structure = model_.predict(
@@ -349,7 +360,7 @@ class DepositIterativeCalculator(AbstractCalculator):
             )
             self._add_predictions_to_model_data(balance_structure, forecast_date)
 
-    def calculate_maturity_structure(self, forecast_date):
+    def calculate_maturity_structure(self, forecast_date: datetime) -> None:
         for segment in DEFAULT_SEGMENTS_:
             for repl, sub in OPTIONALS_:
                 model_ = self.maturity_structure_models[(segment, repl, sub)]
@@ -359,7 +370,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                 self._add_predictions_to_model_data(mat_structure_pred, forecast_date)
                 self._add_weighted_rates(forecast_date, segment, repl, sub)
 
-    def calculate_opt_structure(self, forecast_date):
+    def calculate_opt_structure(self, forecast_date: datetime) -> None:
         for segment in NONDEFAULT_SEGMENTS_:
             model_ = self.opt_structure_models[segment]
             opt_structure_pred = model_.predict(
@@ -370,7 +381,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                 self._add_weighted_rates(forecast_date, segment)
         self._add_weighted_rates(forecast_date, segment="vip")
 
-    def calculate_newbusiness(self, forecast_date):
+    def calculate_newbusiness(self, forecast_date: datetime) -> None:
         for segment in NONDEFAULT_SEGMENTS_:
             model_ = self.newbusiness_models[segment]
             newbusiness_pred = model_.predict(
@@ -379,7 +390,7 @@ class DepositIterativeCalculator(AbstractCalculator):
             self._add_predictions_to_model_data(newbusiness_pred, forecast_date)
         self._calculate_absolute_inflows(forecast_date)
 
-    def calculate_early_withdrawal(self, forecast_date):
+    def calculate_early_withdrawal(self, forecast_date: datetime) -> None:
         pred_res = []
 
         # сабконтекст передает признаки, даты, портфель и тд
@@ -393,7 +404,7 @@ class DepositIterativeCalculator(AbstractCalculator):
         portfolio_res = pd.concat(pred_res).reset_index(drop=True)
         self._forecast_context.model_data["portfolio"][forecast_date] = portfolio_res
 
-    def calculate_saving_accounts_balance(self, forecast_date):
+    def calculate_saving_accounts_balance(self, forecast_date: datetime) -> None:
         for segment in DEFAULT_SEGMENTS_:
             segment_models = self.saving_accounts_models[segment]
             if segment_models.keys() == {"general_avg_balance", "kopilka_avg_balance"}:
@@ -414,7 +425,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                     sa_segment_balance_pred, forecast_date
                 )
 
-    def calculate_current_accounts_balance(self, forecast_date):
+    def calculate_current_accounts_balance(self, forecast_date: datetime) -> None:
         curr_acc_models = self.current_accounts_models
         subcontext = self._forecast_context.subcontext(forecast_date)
         if curr_acc_models.keys() == {"general_avg_balance", "segment_structure"}:
@@ -433,7 +444,7 @@ class DepositIterativeCalculator(AbstractCalculator):
             self._add_predictions_to_model_data(general_pred, forecast_date)
             self._add_predictions_to_model_data(segment_balance_pred, forecast_date)
 
-    def run_step(self, forecast_date):
+    def run_step(self, forecast_date: datetime) -> None:
         self._add_scenario_to_model_data(forecast_date)
 
         self.calculate_renewal(forecast_date)
@@ -446,7 +457,7 @@ class DepositIterativeCalculator(AbstractCalculator):
         self.calculate_early_withdrawal(forecast_date)
         self.calculate_current_accounts_balance(forecast_date)
 
-    def run_expected_amount(self, step, forecast_date):
+    def run_expected_amount(self, step: int, forecast_date: datetime) -> None:
         """
         Добавление на первом шаге прогноза калибровочного коэффициента к новому бизнесу чтобы прогноз совпадал с ожидаемым значением.
         Ожидаемое значение задается в сценарии.
@@ -486,7 +497,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                 coef,
             )
 
-    def run_early_withdrawal_correct(self, step, forecast_date):
+    def run_early_withdrawal_correct(self, step: int, forecast_date: datetime) -> None:
         """
         Корректируем перетоки из досрочного отзыва и операций в новый бизнес
         """
@@ -522,7 +533,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                 + weights * port_first["SER_d_cl"].sum() * COEF_EW_CONV_NB
             )
 
-    def ew_share_calc(self, portfolio_res):
+    def ew_share_calc(self, portfolio_res: pd.DataFrame) -> pd.DataFrame:
         port_ew = (
             portfolio_res.groupby(EW_AGG_COLS)
             .sum()[["balance", "early_withdrawal_in_month"]]
@@ -552,7 +563,12 @@ class DepositIterativeCalculator(AbstractCalculator):
 
         return port_ew
 
-    def forecast_values_calc(self, agg_res1, CurrentAccounts1, SavingAccounts1):
+    def forecast_values_calc(
+        self,
+        agg_res1: pd.DataFrame,
+        CurrentAccounts1: pd.DataFrame,
+        SavingAccounts1: pd.DataFrame,
+    ) -> pd.DataFrame:
         agg_res = agg_res1.copy()
         CurrentAccounts = CurrentAccounts1.copy()
         SavingAccounts = SavingAccounts1.copy()
@@ -622,7 +638,7 @@ class DepositIterativeCalculator(AbstractCalculator):
 
         return res
 
-    def _add_cols_to_port(self, port):
+    def _add_cols_to_port(self, port: pd.DataFrame) -> pd.DataFrame:
         port = port.copy()
         port.loc[:, "replenishable_flg"] = port["optional_flg"].isin([2, 3]).astype(int)
         port.loc[:, "subtraction_flg"] = port["optional_flg"].isin([1, 3]).astype(int)
@@ -633,7 +649,7 @@ class DepositIterativeCalculator(AbstractCalculator):
         )
         return port
 
-    def _add_orig_shares_balance(self, port):
+    def _add_orig_shares_balance(self, port: pd.DataFrame) -> pd.DataFrame:
         """
         Заполняем пропуски в оригинально портфеле
         Также проставляем нуллы для сегментов где доля ноль
@@ -680,7 +696,7 @@ class DepositIterativeCalculator(AbstractCalculator):
 
         return port
 
-    def _add_orig_shares_client_types(self, port):
+    def _add_orig_shares_client_types(self, port: pd.DataFrame) -> pd.DataFrame:
         """
         Функция заполняет доли по типам клиентов
         """
@@ -712,7 +728,7 @@ class DepositIterativeCalculator(AbstractCalculator):
 
         return port
 
-    def _portfolio_result(self, port):
+    def _portfolio_result(self, port: pd.DataFrame) -> pd.DataFrame:
         port["bucketed_balance_nm"] = port.bucketed_balance.apply(
             lambda x: (
                 BUCKETED_BALANCE_MAP_[x] if x in BUCKETED_BALANCE_MAP_ else "<100k"
@@ -747,7 +763,7 @@ class DepositIterativeCalculator(AbstractCalculator):
             ignore_index=True,
         )
 
-    def _agg_contract_close_fact(self, group_cols):
+    def _agg_contract_close_fact(self, group_cols: Sequence[str]) -> pd.DataFrame:
         res = pd.DataFrame()
         for date in self._forecast_context.forecast_dates:
             previous_dt = date + MonthEnd(-1)
@@ -773,7 +789,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         res[_REPORT_DT_COLUMN] = pd.to_datetime(res[_REPORT_DT_COLUMN]) + MonthEnd(0)
         return res[[_REPORT_DT_COLUMN] + group_cols + ["contract_close"]]
 
-    def _agg_renewal(self, port, group_cols):
+    def _agg_renewal(
+        self, port: pd.DataFrame, group_cols: Sequence[str]
+    ) -> pd.DataFrame:
         renewal = port.query(
             "(report_month == open_month) and (weight_renewal_cnt >= 1) "
         )
@@ -786,7 +804,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         renewal = renewal.rename(columns={"total_generation": "renewal"})
         return renewal
 
-    def _agg_newbusiness(self, port, group_cols):
+    def _agg_newbusiness(
+        self, port: pd.DataFrame, group_cols: Sequence[str]
+    ) -> pd.DataFrame:
         newbiz = port.query(
             "(report_month == open_month) and (weight_renewal_cnt < 1) "
         )
@@ -799,7 +819,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         newbiz = newbiz.rename(columns={"total_generation": "newbusiness"})
         return newbiz
 
-    def _agg_early_withdrawal(self, port, group_cols):
+    def _agg_early_withdrawal(
+        self, port: pd.DataFrame, group_cols: Sequence[str]
+    ) -> pd.DataFrame:
         ew = (
             port.groupby([_REPORT_DT_COLUMN, *group_cols])["SER_d_cl"]
             .sum()
@@ -813,7 +835,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         )
         return ew[[_REPORT_DT_COLUMN, *group_cols, "early_withdrawal", "operations"]]
 
-    def _agg_interests(self, port, group_cols):
+    def _agg_interests(
+        self, port: pd.DataFrame, group_cols: Sequence[str]
+    ) -> pd.DataFrame:
         old_port = port[port.total_generation_lag1 > 0]
         old_port["interests"] = (
             old_port["total_generation"]
@@ -827,7 +851,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         )
         return interests
 
-    def _agg_balance(self, port, group_cols):
+    def _agg_balance(
+        self, port: pd.DataFrame, group_cols: Sequence[str]
+    ) -> pd.DataFrame:
         bal = (
             port.groupby([_REPORT_DT_COLUMN, *group_cols])["total_generation"]
             .sum()
@@ -836,7 +862,7 @@ class DepositIterativeCalculator(AbstractCalculator):
         bal = bal.rename(columns={"total_generation": "balance"})
         return bal
 
-    def _agg_saving_accounts_balance(self):
+    def _agg_saving_accounts_balance(self) -> pd.DataFrame:
         model_data = self._forecast_context.model_data["features"]
         sa_balance = []
         for segment in DEFAULT_SEGMENTS_:
@@ -852,7 +878,7 @@ class DepositIterativeCalculator(AbstractCalculator):
         sa_balance_table.columns.name = "balance"
         return sa_balance_table
 
-    def _agg_current_accounts_balance(self):
+    def _agg_current_accounts_balance(self) -> pd.DataFrame:
         model_data = self._forecast_context.model_data["features"]
         ca_balance = []
         for segment in [*DEFAULT_SEGMENTS_]:
@@ -867,7 +893,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         ca_balance = pd.concat(ca_balance, axis=0)
         return ca_balance
 
-    def _aggregated_data(self, port, group_cols):
+    def _aggregated_data(
+        self, port: pd.DataFrame, group_cols: Sequence[str]
+    ) -> pd.DataFrame:
         contract_close = self._agg_contract_close_fact(group_cols)
         renewal = self._agg_renewal(port, group_cols)
         newbiz = self._agg_newbusiness(port, group_cols)
@@ -880,7 +908,7 @@ class DepositIterativeCalculator(AbstractCalculator):
         )
         return res.fillna(0)
 
-    def _maturity_table(self, agg_df):
+    def _maturity_table(self, agg_df: pd.DataFrame) -> pd.DataFrame:
         """
         Создание таблицы по срочностям
         """
@@ -904,7 +932,12 @@ class DepositIterativeCalculator(AbstractCalculator):
 
         return agg_df[mat_right_order_cols]
 
-    def _volumes_table(self, agg_data, sa_data, ca_data):
+    def _volumes_table(
+        self,
+        agg_data: pd.DataFrame,
+        sa_data: pd.DataFrame,
+        ca_data: pd.DataFrame,
+    ) -> pd.DataFrame:
         """
         Создание таблицы по объемам
         """
@@ -947,7 +980,9 @@ class DepositIterativeCalculator(AbstractCalculator):
 
         return res[volumes_right_order_cols]
 
-    def _check_decomposition(self, macro, decomp_max_error=1e9):
+    def _check_decomposition(
+        self, macro: pd.DataFrame, decomp_max_error: float = 1e9
+    ) -> None:
         decomp_cols = [
             "newbusiness",
             "contract_close",
@@ -977,7 +1012,7 @@ class DepositIterativeCalculator(AbstractCalculator):
                 f"Decomposition doesn't converge. Fact balance like: {fact_bal}, decomposed_balance looks like: {decomp_theory_balance}"
             )
 
-    def _add_start_balance(self, agg_data):
+    def _add_start_balance(self, agg_data: pd.DataFrame) -> pd.DataFrame:
         """
         Добавляем стартовый баланс в агрегированную таблицу с депозитами
         2 этапа - на начальную дату берем из портфеля
