@@ -1,3 +1,5 @@
+"""Utilities for training and registering forecasting models."""
+
 from __future__ import annotations
 
 import logging
@@ -17,6 +19,8 @@ logger = logging.getLogger("core")
 
 
 class TrainingManager:
+    """Coordinate trainer instances, storage, and model registration."""
+
     def __init__(
         self,
         spark: SparkSession,
@@ -38,6 +42,8 @@ class TrainingManager:
         self._model_data: Dict[ModelInfo, BytesIO] = {}
 
     def _find_missing_models(self) -> List[Tuple[str, int]]:
+        """Return (tag, step) tuples missing from the model database."""
+
         if not self._db:
             return []
 
@@ -51,6 +57,8 @@ class TrainingManager:
         return missing_in_db
 
     def _train_model(self, tag: str, step: int) -> bool:
+        """Train and persist the model identified by *tag* and *step*."""
+
         logger.info(
             f"train_model tag={tag}, step={step}, end_date={self._end_dates[step]}"
         )
@@ -82,6 +90,8 @@ class TrainingManager:
         return True
 
     def _train_missing_models(self) -> None:
+        """Train models that are not yet stored in the database."""
+
         missing_in_db = self._find_missing_models()
         logger.info(f"missing models: {missing_in_db}")
 
@@ -90,14 +100,20 @@ class TrainingManager:
             self._train_model(missing[0], missing[1])
 
     def _train_models(self) -> None:
+        """Train every configured model for all end dates."""
+
         for tag in self._trainers:
             for step in self._end_dates:
                 self._train_model(tag, step)
 
     def _create_folders(self) -> None:
+        """Ensure the model output directory exists."""
+
         makedirs(self._model_folder, exist_ok=True)
 
     def _load_models(self) -> None:
+        """Load existing models from the database into memory."""
+
         if not self._db:
             raise ValueError("Model db is None, use force_training")
 
@@ -117,6 +133,8 @@ class TrainingManager:
         register: ModelRegister,
         end_dates: List[datetime],
     ) -> None:
+        """Populate *register* with models trained for *end_dates*."""
+
         self._create_folders()
 
         self._end_dates: Dict[int, datetime] = dict(enumerate(end_dates, start=1))
@@ -130,6 +148,8 @@ class TrainingManager:
             register.add_models_from_bytes(self._model_data)
 
     def get_models_by_step(self, step: int) -> Dict[str, ModelInfo]:
+        """Return the models trained for a given *step*."""
+
         return {
             tag: self._trained_models[(step, tag)].to_model_info()
             for tag in self._trainers
@@ -137,9 +157,13 @@ class TrainingManager:
 
     @property
     def trained_models(self) -> Dict[Tuple[int, str], ModelInfo]:
+        """Expose the mapping of (step, tag) to :class:`ModelInfo`."""
+
         return self._trained_models
 
     def train_models_one_date(self, end_dt: datetime) -> None:
+        """Train models for a single *end_dt* cutoff."""
+
         self._create_folders()
         self._end_dates: Dict[int, datetime] = {1: end_dt}
 

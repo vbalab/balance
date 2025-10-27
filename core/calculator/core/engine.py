@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Execution engines that train models and run calculators."""
+
 import logging
 import pickle
 from abc import ABC, abstractmethod
@@ -29,6 +31,8 @@ logger = logging.getLogger("core")
 
 @dataclass
 class BaseConfig:
+    """Configuration shared by the different calculator execution engines."""
+
     first_train_end_dt: Optional[datetime] = None
     horizon: int = 1  # TODO: check if necessary here
     trainers: Optional[Dict[str, ModelTrainer]] = None
@@ -40,9 +44,13 @@ class BaseConfig:
 
     @property
     def first_dt_str(self) -> str:
+        """Return ``first_train_end_dt`` formatted for logging."""
+
         return self.first_train_end_dt.strftime("%Y-%m-%d")
 
     def _get_dates(self) -> List[datetime]:
+        """Internal helper returning the training/forecast schedule."""
+
         datarange = pd.date_range(
             self.first_train_end_dt,
             periods=self.horizon * steps_ + 1,
@@ -53,11 +61,15 @@ class BaseConfig:
         return dates
 
     def _train_ends(self) -> List[datetime]:
+        """Return the chronological list of training end dates."""
+
         dates = _get_dates()
 
         return dates[:: self.horizon][:-1]
 
     def _forecast_dates(self, steps_: int = 1) -> Dict[int, List[datetime]]:
+        """Return mapping from step index to forecast horizon dates."""
+
         dates = _get_dates()
 
         return {
@@ -70,10 +82,7 @@ T = TypeVar("T", bound="AbstractEngine")
 
 
 class AbstractEngine(ABC):
-    """
-    Класс позволяет в ходе его работы обучать нужные для бэктеста модели и
-    запускать калькулятор с переданными параметрами, получать итоговый результат.
-    """
+    """Coordinate model training, data preparation and calculator execution."""
 
     def __init__(
         self,
@@ -95,6 +104,8 @@ class AbstractEngine(ABC):
         self._calc_results: Dict[int, CalculationResult] = {}
 
     def __getstate__(self) -> Dict[str, Any]:
+        """Return a picklable representation excluding active connections."""
+
         state = self.__dict__.copy()
 
         to_exclude = {"_spark", "_training_manager"}
@@ -103,9 +114,13 @@ class AbstractEngine(ABC):
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore state previously produced by :meth:`__getstate__`."""
+
         self.__dict__.update(state)
 
     def save(self, path: str) -> None:
+        """Serialize the engine to *path* using :mod:`pickle`."""
+
         with open(path, "wb") as fo:
             pickle.dump(self, fo)
 
@@ -149,6 +164,8 @@ class AbstractEngine(ABC):
 
     @staticmethod
     def get_segment(product: str, mapping: Dict[str, str]) -> str:
+        """Infer a segment label for *product* using *mapping*."""
+
         prod_l: str = product.lower()
 
         for k, v in mapping.items():
@@ -159,34 +176,50 @@ class AbstractEngine(ABC):
 
     @classmethod
     def load_from_file(cls, path: str) -> T:
+        """Load a previously serialized engine from *path*."""
+
         with open(path, "rb") as fo:
             return pickle.load(fo)
 
     @property
     def register(self) -> ModelRegister:
+        """Access the shared :class:`ModelRegister`."""
+
         return self._register
 
     @property
     def trained_models(self) -> Dict[Tuple[int, str], ModelInfo]:
+        """Mapping from training step to trained model identifiers."""
+
         return self._training_manager.trained_models
 
     @property
     def portfolio_data(self) -> Dict[Tuple[int, str], pd.DataFrame]:
+        """Portfolio datasets cached per step and loader tag."""
+
         return self._portfolio_data
 
     @property
     def calc_results(self) -> Dict[int, CalculationResult]:
+        """Access calculation results collected during engine execution."""
+
         return self._calc_results
 
     def train_models(self) -> None:
+        """Delegate the training routine to the :class:`TrainingManager`."""
+
         self._training_manager.add_to_register(self._register, self._config.train_ends)
 
     @abstractmethod
     def run_all(self) -> None:
+        """Execute the engine workflow across all configured steps."""
+
         pass
 
     @abstractmethod
     def save_to_db(
         self, model_db: ModelDB, analyzers: List[Any], segment_map: Dict[str, str]
     ) -> Any:
+        """Persist analysis artefacts produced by the engine."""
+
         pass

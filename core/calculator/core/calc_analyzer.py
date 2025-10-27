@@ -1,4 +1,5 @@
 from __future__ import annotations
+"""Tools that analyse calculator outputs and produce metrics or charts."""
 
 from abc import ABC, abstractmethod
 from functools import reduce
@@ -32,19 +33,23 @@ MetricFunc = Callable[[pd.Series, pd.Series], float]
 
 
 class CalculatorAnalyzer(ABC):
+    """Abstract interface for calculator output analysers."""
+
     @abstractmethod
     def get_metrics(self, engine: BackTestEngine) -> Dict[Any, Any]:
+        """Return evaluation metrics built from *engine* results."""
+
         pass
 
     @abstractmethod
     def get_chart_data(self, engine: BackTestEngine) -> Dict[Any, Any]:
+        """Return chart-ready data frames built from *engine* results."""
+
         pass
 
 
 class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
-    """
-    This analyzer just compares predictions with truth and outputs metrics
-    """
+    """Compare predictions and ground truth to produce metrics and charts."""
 
     denominator: int = DEFAULT_DENOMINATOR
     units: str = DEFAULT_UNITS
@@ -54,8 +59,16 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
         path_dict: Dict[Tuple[str, str], Tuple[str, str]],
         metrics: Dict[str, MetricFunc] = BASIC_METRICS,
     ) -> None:
-        """
-        Example path_dict: {('CurrentAccountsBalance', 'means_seas'): ('curr_acc_rur', 'end_balance_amt')}
+        """Configure the analyser with model paths and metrics.
+
+        Parameters
+        ----------
+        path_dict:
+            Mapping from forecast result keys to ground truth paths. For
+            example ``{('CurrentAccountsBalance', 'means_seas'): ('curr_acc_rur',
+            'end_balance_amt')}``.
+        metrics:
+            Metric name to callable mapping. Defaults to :data:`BASIC_METRICS`.
         """
 
         self._metrics: Dict[str, MetricFunc] = metrics
@@ -64,6 +77,8 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
     def _fcst_extractor(
         self, engine: BackTestEngine, fcst_path: Tuple[str, str], backtest_step: int
     ) -> pd.DataFrame:
+        """Retrieve prediction data for *fcst_path* at *backtest_step*."""
+
         return (
             engine.calc_results[backtest_step]
             .calculated_data[fcst_path[0]][[_REPORT_DT_COLUMN, fcst_path[1]]]
@@ -73,19 +88,27 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
     def _ground_truth_extractor(
         self, engine: BackTestEngine, trth_path: Tuple[str, str], backtest_step: int
     ) -> pd.DataFrame:
+        """Retrieve ground truth for *trth_path* at *backtest_step*."""
+
         return engine.ground_truth[(backtest_step, trth_path[0])]["target"][
             [_REPORT_DT_COLUMN, trth_path[1]]
         ].rename(columns={trth_path[1]: "truth"})
 
     def _get_product_name(self, fcst_path: Tuple[str, str]) -> str:
+        """Return the product identifier for the provided *fcst_path*."""
+
         return fcst_path[0]
 
     def _get_chart_name(self, fcst_path: Tuple[str, str]) -> str:
+        """Return a human readable chart name for *fcst_path*."""
+
         return "_".join(fcst_path)
 
     def _get_results_dict(
         self, engine: BackTestEngine
     ) -> Dict[Tuple[str, str], pd.DataFrame]:
+        """Build aligned prediction and truth data for every configured path."""
+
         output: Dict[Tuple[str, str], pd.DataFrame] = {}
 
         for fcst_path, trth_path in self._path_dict.items():
@@ -129,6 +152,8 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
         metric_name: str,
         metric_func: MetricFunc,
     ) -> pd.Series:
+        """Apply a single metric to the grouped results."""
+
         return results_df_agg.apply(lambda df: metric_func(df.truth, df.pred)).rename(
             metric_name
         )
@@ -136,6 +161,8 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
     def _apply_all_metrcis(
         self, results_df_agg: pd.core.groupby.generic.DataFrameGroupBy
     ) -> pd.DataFrame:
+        """Apply all configured metrics to the provided aggregation."""
+
         output: List[pd.Series] = []
         for metric_name, metric_func in self._metrics.items():
             output.append(self._apply_metric(results_df_agg, metric_name, metric_func))
@@ -145,6 +172,8 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
         )
 
     def _get_metrics_one_df(self, results_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        """Calculate step, horizon and overall metrics for *results_df*."""
+
         steps_metrics = self._apply_all_metrcis(results_df.groupby("backtest_step"))
         ahead_metrics = self._apply_all_metrcis(results_df.groupby("periods_ahead"))
         overall_metrcis = self._apply_all_metrcis(results_df.groupby("product"))
@@ -156,6 +185,8 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
         }
 
     def get_metrics(self, engine: BackTestEngine) -> Dict[str, Dict[str, pd.DataFrame]]:
+        """Return metrics for every configured forecast/target pair."""
+
         results_dict: Dict[Tuple[str, str], pd.DataFrame] = self._get_results_dict(
             engine
         )
@@ -165,6 +196,8 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
     def get_chart_data(
         self, engine: BackTestEngine
     ) -> Dict[Tuple[str, str], pd.DataFrame]:
+        """Return raw chart data for every configured forecast/target pair."""
+
         nominal: Dict[Tuple[str, str], pd.DataFrame] = self._get_results_dict(engine)
         # for k, v in nominal.items():
         #    nominal[k].loc[:, ['pred', 'truth']] = v.loc[:, ['pred', 'truth']] / self.denominator
@@ -178,6 +211,8 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
         step_delimiters: bool,
         yaxis_limits: List[Optional[float]],
     ) -> None:
+        """Render a single chart for *chart_name* with optional delimiters."""
+
         fig = go.Figure()
         # name = chart_data['product'].iloc[0]
         fig.add_trace(
@@ -254,6 +289,8 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
         step_delimiters: bool = True,
         yaxis_limits: List[Optional[float]] = YAXIS_LIMITS,
     ) -> None:
+        """Render charts for every configured forecast/target pair."""
+
         chart_datas = self.get_chart_data(engine).items()
 
         for fcst_path, chart_data in chart_datas:
@@ -268,27 +305,22 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
 
 
 class SymbolicCalculatorAnalyzer(SimpleCalculatorAnalyzer):
-    """
-    This analyzer allows simple calculations of prediction/ground_truth columns via pd.eval()
-
-    An appropriate path_dict has to be provided.
-    """
+    """Analyzer that evaluates symbolic expressions for predictions and truth."""
 
     def __init__(
         self,
         path_dict: Dict[Tuple[str, str], Tuple[str, str]],
         metrics: Dict[str, MetricFunc] = None,
     ) -> None:
-        """
-        Example path_dict: {('CurrentAccountsBalance', 'means_seas'): ('curr_acc_rur', 'end_balance_amt'),
-             ('CurrentAccountsBalance', '(`0.95q_seas` + `0.05q_seas`)/2'): ('curr_acc_rur', 'end_balance_amt')}
-        """
+        """Initialise the analyser with optional custom metrics."""
         metrics_to_use = metrics if metrics is not None else BASIC_METRICS
         super().__init__(path_dict, metrics_to_use)
 
     def _get_results_dict(
         self, engine: BackTestEngine
     ) -> Dict[Tuple[str, str], pd.DataFrame]:
+        """Build chart-ready data using symbolic expressions from *path_dict*."""
+
         output: Dict[Tuple[str, str], pd.DataFrame] = {}
 
         for fcst_path, trth_path in self._path_dict.items():

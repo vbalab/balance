@@ -1,3 +1,5 @@
+"""Foundational calculator abstractions and shared utilities."""
+
 from __future__ import annotations
 
 import logging
@@ -19,25 +21,28 @@ logger = logging.getLogger("core")
 
 
 class CalculationType(Enum):  # TODO: why do we need it at all
+    """Marker enumeration for calculator-specific calculation flavours."""
+
     pass
 
 
 class CurrentAccountsCalculationType(CalculationType):  # TODO: why here??
+    """Calculation types that are specific to current-account scenarios."""
+
     CurrentAccountsBalance = auto()
 
 
 @dataclass
 class CalculationResult:
+    """Container describing the outcome of a calculator run."""
+
     calc_type: CalculationType  # it is not even used
     config: Scenario  # TODO: rename to `scenario`, because we have `BaseConfig` in engine.py
     calculated_data: Dict[str, pd.DataFrame]
 
 
 class ModelRegister:
-    """
-    Класс представляет собой интерфейс для добавления и хранения _уже обученных_ моделей.
-    Как правило используется только в ходе расчетов внутри калькулятора.
-    """
+    """Registry that exposes access to pre-trained model instances."""
 
     MODEL_FILE_MASK = "*.*"
 
@@ -54,6 +59,8 @@ class ModelRegister:
     def _find_adapter_type(
         self, model_info_: ModelInfo
     ) -> Optional[Type[BaseModel]]:
+        """Return a model adapter type for the provided :class:`ModelInfo`."""
+
         adapter_type_: Optional[Type[BaseModel]] = None
         if self._adapter_types is not None:
             adapter_type_ = self._adapter_types.get(model_info_.prefix)
@@ -64,6 +71,8 @@ class ModelRegister:
         return adapter_type_
 
     def add_models_from_folder(self, folder: str, recursive: bool = False) -> None:
+        """Register models located inside *folder* according to adapter bindings."""
+
         if not folder:
             return
 
@@ -86,10 +95,14 @@ class ModelRegister:
     def add_models_from_folders(
         self, folders: Iterable[str], recursive: bool = False
     ) -> None:
+        """Register models from every folder listed in *folders*."""
+
         for folder in folders:
             self.add_models_from_folder(folder, recursive=recursive)
 
     def add_models_from_bytes(self, model_data: Dict[ModelInfo, BytesIO]) -> None:
+        """Register models from in-memory serialized blobs."""
+
         logger.info("add_models_from_bytes")
 
         for model_info, data in model_data.items():
@@ -110,27 +123,29 @@ class ModelRegister:
                 )
 
     def get_model(self, model_info: ModelInfo) -> BaseModel:
+        """Return the instantiated model corresponding to *model_info*."""
+
         return self._models[model_info]
 
     def add_model(self, model: BaseModel) -> None:
+        """Add a pre-instantiated *model* to the registry."""
+
         self._models[model.model_info] = model
 
     def add_models(self, models: Iterable[BaseModel]) -> None:
+        """Bulk register each model from *models*."""
+
         for model_ in models:
             self.add_model(model_)
 
     def list_models(self) -> Dict[ModelInfo, BaseModel]:
+        """Return every registered model keyed by its :class:`ModelInfo`."""
+
         return self._models
 
 
 class AbstractCalculator(ABC):
-    """
-    Калькулятор - это класс, в котором происходят все манипуляции
-    для получения прогноза, например: добавление данных сценария,
-    подгрузка дополнительных фичей, пересчет фичей, прогноз моделей,
-    согласование прогнозов моделей, формирование конечного
-    резултата пргноза и т. п.
-    """
+    """Base class describing the workflow required to build a forecast."""
 
     def __init__(
         self,
@@ -156,10 +171,14 @@ class AbstractCalculator(ABC):
 
     @abstractmethod
     def calculate(self, calc_type: CalculationType) -> CalculationResult:
+        """Execute the calculation for *calc_type* and return the result."""
+
         pass
 
 
 class SingleModelCalculator(AbstractCalculator):  # TODO: check if used at all
+    """Calculator that delegates the entire forecast to a single model."""
+
     # TODO: the same applies here
     def __init__(
         self,
@@ -175,6 +194,8 @@ class SingleModelCalculator(AbstractCalculator):  # TODO: check if used at all
         )
 
     def calculate(self, calc_type: CalculationType) -> CalculationResult:
+        """Run the wrapped model and return its predictions as a result."""
+
         df_predictions: pd.DataFrame = self._model.predict(self._forecast_context)
 
         return CalculationResult(
