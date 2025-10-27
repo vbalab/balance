@@ -1,3 +1,5 @@
+"""Backtesting support for calculator pipelines."""
+
 from __future__ import annotations
 
 import logging
@@ -29,18 +31,26 @@ logger = logging.getLogger("core")
 
 @dataclass
 class BackTestConfig(BaseConfig):
+    """Configuration defining a rolling backtest."""
+
     steps: int = 1
 
     @property
     def train_ends(self) -> List[datetime]:
+        """Return the end dates for each training iteration."""
+
         return self._train_ends()
 
     @property
     def forecast_dates(self) -> Dict[int, List[datetime]]:
+        """Map backtest step indices to their forecast horizons."""
+
         return self._forecast_dates(self.steps)
 
 
 class BackTestEngine(AbstractEngine):
+    """Engine that orchestrates multi-step backtesting workflows."""
+
     # TODO: better move to definitions.py
     DEPOSIT_SEGMENT_MAP: Dict[str, str] = {
         "_portfolio": "portfolio",
@@ -62,13 +72,19 @@ class BackTestEngine(AbstractEngine):
 
     @property
     def prediction_data(self) -> Dict[Tuple[int, str], Dict[str, pd.DataFrame]]:
+        """Return cached prediction datasets for each step/tag."""
+
         return self._prediction_data
 
     @property
     def ground_truth(self) -> Dict[Tuple[int, str], Dict[str, pd.DataFrame]]:
+        """Return cached ground truth datasets for each step/tag."""
+
         return self._ground_truth
 
     def _load_data(self, step: int, tag: str) -> None:
+        """Fetch input data for a given *step* and loader *tag*."""
+
         start_dt: datetime = self._config.forecast_dates[step][0]
         end_dt: datetime = self._config.forecast_dates[step][-1]
 
@@ -105,6 +121,8 @@ class BackTestEngine(AbstractEngine):
         )
 
     def _create_calculator(self, step: int) -> AbstractCalculator:
+        """Instantiate a calculator for the specified *step*."""
+
         models: Dict[str, ModelInfo] = {
             tag: self.trained_models[(step, tag)] for tag in self._config.trainers
         }
@@ -128,6 +146,8 @@ class BackTestEngine(AbstractEngine):
         )
 
     def _run_step(self, step: int) -> None:
+        """Execute a single backtest step."""
+
         for tag in self._config.data_loaders:
             self._load_data(step, tag)
 
@@ -135,6 +155,8 @@ class BackTestEngine(AbstractEngine):
         self._calc_results[step] = calc.calculate(self._config.calc_type)
 
     def run_all(self) -> None:
+        """Train models and run the backtest for each configured step."""
+
         self.train_models()
         logger.info("training models completed")
 
@@ -143,6 +165,8 @@ class BackTestEngine(AbstractEngine):
             logger.info(f"step {step} completed")
 
     def _get_backtest_entity(self, df: pd.DataFrame) -> BackTestInfoEntity:
+        """Transform chart data into a database persistence entity."""
+
         backtest_info = BackTestInfoEntity(
             first_train_dt=self._config.first_train_end_dt,
             steps=self._config.steps,
@@ -176,6 +200,8 @@ class BackTestEngine(AbstractEngine):
         analyzers: Iterable[Any],
         segment_map: Optional[Dict[str, str]] = DEPOSIT_SEGMENT_MAP,
     ) -> bool:
+        """Persist backtest results in *model_db* using *analyzers*."""
+
         dfs: List[pd.DataFrame] = []
 
         for analyzer in analyzers:
@@ -198,19 +224,27 @@ class BackTestEngine(AbstractEngine):
 
 @dataclass
 class BackTestHonestConfig(BaseConfig):
+    """Configuration for honest backtests with explicit scenarios."""
+
     steps: int = 1
     scenario_loader: Optional[DataLoader] = None
 
     @property
     def train_ends(self) -> List[datetime]:
+        """Return the training end dates for each step."""
+
         return self._train_ends()
 
     @property
     def forecast_dates(self) -> Dict[int, List[datetime]]:
+        """Return the forecast horizons for each step."""
+
         return self._forecast_dates(self.steps)
 
 
 class BackTestHonestEngine(AbstractEngine):
+    """Engine variant that pulls scenario data from dedicated loaders."""
+
     def __init__(
         self,
         spark: SparkSession,
@@ -228,9 +262,13 @@ class BackTestHonestEngine(AbstractEngine):
 
     @property
     def prediction_data(self) -> Dict[Tuple[int, str], Dict[str, pd.DataFrame]]:
+        """Return cached prediction data sets."""
+
         return self._prediction_data
 
     def _load_ground_truth(self, step: int) -> None:
+        """Load ground truth data for *step* from configured loaders."""
+
         start_dt: datetime = self._config.forecast_dates[step][0]
         end_dt: datetime = self._config.forecast_dates[step][-1]
 
@@ -241,6 +279,8 @@ class BackTestHonestEngine(AbstractEngine):
 
     @property
     def ground_truth(self) -> Dict[Tuple[int, str], Dict[str, pd.DataFrame]]:
+        """Return ground truth data, loading it lazily when required."""
+
         if not self._ground_truth:
             for step in range(1, self._config.steps + 1):
                 self._load_ground_truth(step)
@@ -248,6 +288,8 @@ class BackTestHonestEngine(AbstractEngine):
         return self._ground_truth
 
     def _load_scenario(self, step: int) -> None:
+        """Load scenario inputs and portfolio snapshots for *step*."""
+
         start_dt: datetime = self._config.forecast_dates[step][0]
         end_dt: datetime = self._config.forecast_dates[step][-1]
 
@@ -259,6 +301,8 @@ class BackTestHonestEngine(AbstractEngine):
         self._scenario_data[step] = loader.get_scenario(self._spark, start_dt, end_dt)
 
     def _create_calc(self, step: int) -> AbstractCalculator:
+        """Instantiate the calculator for the honest backtest *step*."""
+
         dt_: datetime = self._config.train_ends[step - 1]
 
         models: Dict[str, ModelInfo] = {
@@ -282,11 +326,15 @@ class BackTestHonestEngine(AbstractEngine):
         )
 
     def _run_step(self, step: int) -> None:
+        """Load inputs and execute a single honest backtest step."""
+
         self._load_scenario(step)
         self.calc: AbstractCalculator = self._create_calc(step)
         self._calc_results[step] = self.calc.calculate(self._config.calc_type)
 
     def run_all(self) -> None:
+        """Run the full honest backtest workflow."""
+
         self.train_models()
         logger.info("training models completed")
 
@@ -297,4 +345,6 @@ class BackTestHonestEngine(AbstractEngine):
     def save_to_db(
         self, model_db: ModelDB, analyzers: List[Any], segment_map: Dict[str, str]
     ) -> None:
+        """Persist honest backtest artefacts. Currently a stub."""
+
         pass

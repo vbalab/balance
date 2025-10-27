@@ -1,3 +1,5 @@
+"""Wrappers responsible for sourcing model data for calculators."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,6 +10,8 @@ from core.upfm.commons import DataLoader
 
 
 class DataLoaderProxy:  # TODO: check if even used
+    """Facade that caches loader results and optionally persists them."""
+
     def __init__(
         self,
         spark: Any,
@@ -23,6 +27,8 @@ class DataLoaderProxy:  # TODO: check if even used
     def get_prediction_data(
         self, loader: str, from_dt: datetime, to: datetime
     ) -> Any:
+        """Return prediction features for *loader* between *from_dt* and *to*."""
+
         prediction_data: Any = None
         if self._data_db:
             prediction_data = data_db.find_prediction_data(loader, from_dt, to)
@@ -38,6 +44,8 @@ class DataLoaderProxy:  # TODO: check if even used
     def get_ground_truth(
         self, loader: str, from_dt: datetime, to: datetime
     ) -> Any:
+        """Return ground truth for *loader* between *from_dt* and *to*."""
+
         ground_truth: Any = None
         if self._data_db:
             ground_truth = data_db.find_ground_truth(loader, from_dt, to)
@@ -51,6 +59,8 @@ class DataLoaderProxy:  # TODO: check if even used
         return ground_truth
 
     def get_portfolio(self, loader: str, portfolio_dt: datetime) -> Any:
+        """Return portfolio snapshot for *loader* at *portfolio_dt*."""
+
         portfolio: Any = None
         if self._data_db:
             portfolio = data_db.find_portfolio(loader, portfolio_dt)

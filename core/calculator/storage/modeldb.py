@@ -6,6 +6,8 @@ from datetime import datetime
 from os.path import basename, splitext
 from typing import Any, Dict, List, Optional, Tuple
 
+"""SQLAlchemy models and helper object for persisting calculator artefacts."""
+
 import pandas as pd
 from sqlalchemy import (
     Column,
@@ -35,6 +37,8 @@ Base = declarative_base()
 
 
 class ModelInfoEntity(Base):
+    """ORM entity describing metadata for a trained model artefact."""
+
     __tablename__ = "model_info"
 
     model_info_id = Column(Integer, primary_key=True)
@@ -64,6 +68,8 @@ class ModelInfoEntity(Base):
 
 
 class TrainedModelEntity(Base):
+    """ORM entity representing a persisted trained model file."""
+
     __tablename__ = "trained_model"
 
     trained_model_id = Column(Integer, primary_key=True)
@@ -96,6 +102,8 @@ class TrainedModelEntity(Base):
 
 
 class PredictionEntity(Base):
+    """Prediction run descriptor grouping associated result payloads."""
+
     __tablename__ = "prediction"
 
     prediction_id = Column(Integer, primary_key=True)
@@ -120,6 +128,8 @@ class PredictionEntity(Base):
 
 
 class PredictionDataEntity(Base):
+    """Individual prediction payload saved for a given tag."""
+
     __tablename__ = "prediction_data"
 
     prediction_data_id = Column(Integer, primary_key=True)
@@ -139,6 +149,8 @@ class PredictionDataEntity(Base):
 
 
 class PortfolioEntity(Base):
+    """Portfolio snapshot descriptor for persisted model inputs."""
+
     __tablename__ = "portfolio"
 
     portfolio_id = Column(Integer, primary_key=True)
@@ -161,6 +173,8 @@ class PortfolioEntity(Base):
 
 
 class PortfolioDataEntity(Base):
+    """Binary payload storing the portfolio data for a specific tag."""
+
     __tablename__ = "portfolio_data"
 
     portfolio_data_id = Column(Integer, primary_key=True)
@@ -180,6 +194,8 @@ class PortfolioDataEntity(Base):
 
 
 class GroundTruthEntity(Base):
+    """Descriptor for stored ground truth datasets."""
+
     __tablename__ = "ground_truth"
 
     ground_truth_id = Column(Integer, primary_key=True)
@@ -198,6 +214,8 @@ class GroundTruthEntity(Base):
 
 
 class GroundTruthDataEntity(Base):
+    """Binary payload storing ground truth data for a specific tag."""
+
     __tablename__ = "ground_truth_data"
 
     ground_truth_data_id = Column(Integer, primary_key=True)
@@ -212,6 +230,8 @@ class GroundTruthDataEntity(Base):
 
 
 class BackTestInfoEntity(Base):
+    """Descriptor for a backtest run and its calculated metrics."""
+
     __tablename__ = "backtest_info"
 
     backtest_info_id = Column(Integer, primary_key=True)
@@ -243,6 +263,8 @@ class BackTestInfoEntity(Base):
 
 
 class BackTestDataEntity(Base):
+    """Individual backtest data record persisted for analysis."""
+
     __tablename__ = "backtest_data"
 
     backtest_data_id = Column(Integer, primary_key=True)
@@ -267,6 +289,8 @@ class BackTestDataEntity(Base):
 
 
 class ModelDB:
+    """Utility class wrapping database access for calculator artefacts."""
+
     def __init__(self, db_url: str) -> None:
         self._db_url: str = db_url
         self._db_engine = create_engine(db_url)

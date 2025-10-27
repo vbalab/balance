@@ -1,3 +1,5 @@
+"""Public exports for the calculator core subsystem."""
+
 from __future__ import annotations
 
 from typing import List

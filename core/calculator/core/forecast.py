@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Engines dedicated to running single-step forecast calculations."""
+
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -23,31 +25,45 @@ logger = logging.getLogger("core")
 
 @dataclass
 class ForecastConfig(BaseConfig):
+    """Configuration values required to produce a single forecast run."""
+
     # TODO: why not scenario
     scenario_data: Optional[pd.DataFrame] = None
     portfolio: Optional[pd.DataFrame] = None
 
     @property
     def portfolio_dt(self) -> datetime:
+        """Convenience accessor for the portfolio snapshot date."""
+
         return self.first_train_end_dt
 
     @property
     def train_ends(self) -> List[datetime]:
+        """Return the training end dates used by the forecast."""
+
         return [self.first_train_end_dt]
 
     @property
     def forecast_dates(self) -> List[datetime]:
+        """Return the forecast horizon associated with this run."""
+
         return list(self._forecast_dates().values())[0]
 
 
 class ForecastEngine(AbstractEngine):
+    """Engine responsible for orchestrating a single forecast step."""
+
     STEP_KEY = 1
 
     @property
     def calc_results(self) -> Dict[str, pd.DataFrame]:
+        """Expose the calculated data frame dictionary."""
+
         return self._calc_results[STEP_KEY].calculated_data
 
     def _create_calc(self) -> AbstractCalculator:
+        """Instantiate the configured calculator for the forecast."""
+
         dt_: datetime = self._config.train_ends[0]
 
         models: Dict[str, ModelInfo] = {
@@ -72,6 +88,8 @@ class ForecastEngine(AbstractEngine):
         )
 
     def run_all(self) -> None:
+        """Train required models and execute the calculator once."""
+
         n_models = len(
             self._training_manager._db.find_trained_model_by_dt1(
                 end_dt=self._config.first_train_end_dt
@@ -98,17 +116,25 @@ class ForecastEngine(AbstractEngine):
         analyzers: List[Any],
         segment_map: Dict[str, str],
     ) -> None:
+        """Persist forecast results. Currently a stub implementation."""
+
         pass
 
 
 class ForecastEngine1(AbstractEngine):  # TODO: delete?
+    """Legacy forecast engine variant that loads portfolio data explicitly."""
+
     STEP_KEY = 1
 
     @property
     def calc_results(self) -> CalculationResult:
+        """Return the raw :class:`CalculationResult` object."""
+
         return self._calc_results[ForecastEngine.STEP_KEY]
 
     def _load_data(self, tag: str) -> None:
+        """Load and cache additional data required by the calculator."""
+
         loader_: DataLoader = self._config.data_loaders[tag]
         logger.info(f"loading data for {tag}")
         self._portfolio_data[(ForecastEngine.STEP_KEY, tag)] = loader_.get_portfolio(
@@ -116,6 +142,8 @@ class ForecastEngine1(AbstractEngine):  # TODO: delete?
         )
 
     def _create_calc(self) -> AbstractCalculator:
+        """Instantiate the configured calculator for the legacy engine."""
+
         dt_: datetime = self._config.train_ends[0]
         models: Dict[str, ModelInfo] = {
             tag: self.trained_models[(ForecastEngine.STEP_KEY, tag)]
@@ -133,6 +161,8 @@ class ForecastEngine1(AbstractEngine):  # TODO: delete?
         )
 
     def run_all(self) -> None:
+        """Run the legacy workflow, including portfolio loading."""
+
         self.train_models()
         logger.info("training models completed")
         for tag in self._config.data_loaders:

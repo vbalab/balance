@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from enum import auto
 from functools import reduce
+"""Iterative deposit calculator assembling numerous component models."""
+
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -173,12 +175,16 @@ mat_table_dict_replace = {
 
 
 class DepositsCalculationType(CalculationType):
+    """Calculation types supported by :class:`DepositIterativeCalculator`."""
+
     Deposits = auto()
     SavingAccounts = auto()
     CurrentAccounts = auto()
 
 
 class DepositIterativeCalculator(AbstractCalculator):
+    """Calculator coordinating the iterative deposit forecasting workflow."""
+
     def __init__(
         self,
         model_register: ModelRegister,
@@ -186,6 +192,8 @@ class DepositIterativeCalculator(AbstractCalculator):
         scenario: Scenario,
         model_data: Optional[Dict[str, pd.DataFrame]] = None,
     ) -> None:
+        """Initialise internal model references and helper structures."""
+
         super().__init__(model_register, models, scenario, model_data)
 
         self._set_renewal_model()

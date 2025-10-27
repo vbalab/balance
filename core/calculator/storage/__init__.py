@@ -1,3 +1,5 @@
+"""Storage abstractions used by the calculator package."""
+
 from .modeldb import (
     ModelDB,
     ModelInfoEntity,
