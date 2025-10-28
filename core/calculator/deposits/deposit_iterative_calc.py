@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import auto
 from functools import reduce
-from typing import Dict, Optional, Sequence, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -13,6 +13,7 @@ from pandas.tseries.offsets import MonthEnd
 
 from core.upfm.commons import (
     ModelInfo,
+    ModelMetaInfo,
     BaseModel,
     Scenario,
     _REPORT_DT_COLUMN,
@@ -221,14 +222,36 @@ class DepositIterativeCalculator(AbstractCalculator):
         )
 
     # Переписать сеттеры моделей - много дублирования кода (может как-то через дескрипторы сделать??)
+    def _get_required_model_meta(
+        self, model_meta: Optional[ModelMetaInfo], conditions: Dict[str, Any]
+    ) -> ModelMetaInfo:
+        if model_meta is None:
+            raise KeyError(
+                f"Model matching conditions {conditions} is not defined"
+            )
+        return model_meta
+
+    def _resolve_model_info(self, model_name: str) -> ModelInfo:
+        try:
+            return self._models[model_name]
+        except KeyError as exc:
+            raise KeyError(f"Model '{model_name}' is not registered") from exc
+
+    @staticmethod
+    def _enum_name(member: DepositsCalculationType) -> str:
+        return member.name
+
     def _set_maturity_structure_model_by_params(
         self, segment: str, repl: int, sub: int
     ) -> None:
-        model_name: str = MaturityStructure.get_model_by_conditions(
-            segment=segment, replenishable_flg=repl, subtraction_flg=sub
-        ).model_name
+        model_meta = self._get_required_model_meta(
+            MaturityStructure.get_model_by_conditions(
+                segment=segment, replenishable_flg=repl, subtraction_flg=sub
+            ),
+            {"segment": segment, "replenishable_flg": repl, "subtraction_flg": sub},
+        )
 
-        model_info: ModelInfo = self._models[model_name]
+        model_info = self._resolve_model_info(model_meta.model_name)
         self.maturity_structure_models[(segment, repl, sub)] = (
             self._model_register.get_model(model_info)
         )
@@ -236,11 +259,14 @@ class DepositIterativeCalculator(AbstractCalculator):
     def _set_early_withdrawal_model_by_params(
         self, segment: str, repl: int, sub: int
     ) -> None:
-        model_name: str = EarlyWithdrawal.get_model_by_conditions(
-            segment=segment, replenishable_flg=repl, subtraction_flg=sub
-        ).model_name
+        model_meta = self._get_required_model_meta(
+            EarlyWithdrawal.get_model_by_conditions(
+                segment=segment, replenishable_flg=repl, subtraction_flg=sub
+            ),
+            {"segment": segment, "replenishable_flg": repl, "subtraction_flg": sub},
+        )
 
-        model_info: ModelInfo = self._models[model_name]
+        model_info = self._resolve_model_info(model_meta.model_name)
         self.early_withdrawal_models[(segment, repl, sub)] = (
             self._model_register.get_model(model_info)
         )
@@ -260,10 +286,11 @@ class DepositIterativeCalculator(AbstractCalculator):
     def _set_balance_structure_models(self) -> None:
         self.balance_structure_models: Dict[str, BaseModel] = {}
         for segment in DEFAULT_SEGMENTS_:
-            model_name: str = NewbusinessBuckets.get_model_by_conditions(
-                segment=segment
-            ).model_name
-            model_info: ModelInfo = self._models[model_name]
+            model_meta = self._get_required_model_meta(
+                NewbusinessBuckets.get_model_by_conditions(segment=segment),
+                {"segment": segment},
+            )
+            model_info = self._resolve_model_info(model_meta.model_name)
             self.balance_structure_models[segment] = self._model_register.get_model(
                 model_info
             )
@@ -271,10 +298,11 @@ class DepositIterativeCalculator(AbstractCalculator):
     def _set_opt_structure_models(self) -> None:
         self.opt_structure_models: Dict[str, BaseModel] = {}
         for segment in NONDEFAULT_SEGMENTS_:
-            model_name: str = OptStructure.get_model_by_conditions(
-                segment=segment
-            ).model_name
-            model_info: ModelInfo = self._models[model_name]
+            model_meta = self._get_required_model_meta(
+                OptStructure.get_model_by_conditions(segment=segment),
+                {"segment": segment},
+            )
+            model_info = self._resolve_model_info(model_meta.model_name)
             self.opt_structure_models[segment] = self._model_register.get_model(
                 model_info
             )
@@ -282,10 +310,11 @@ class DepositIterativeCalculator(AbstractCalculator):
     def _set_newbusiness_models(self) -> None:
         self.newbusiness_models: Dict[str, BaseModel] = {}
         for segment in NONDEFAULT_SEGMENTS_:
-            model_name: str = Newbusiness.get_model_by_conditions(
-                segment=segment
-            ).model_name
-            model_info: ModelInfo = self._models[model_name]
+            model_meta = self._get_required_model_meta(
+                Newbusiness.get_model_by_conditions(segment=segment),
+                {"segment": segment},
+            )
+            model_info = self._resolve_model_info(model_meta.model_name)
             self.newbusiness_models[segment] = self._model_register.get_model(
                 model_info
             )
@@ -293,21 +322,39 @@ class DepositIterativeCalculator(AbstractCalculator):
     def _set_saving_accounts_models(self) -> None:
         self.saving_accounts_models: Dict[str, Dict[str, BaseModel]] = {}
         for sa_model in SaModels.models:
-            model_name: str = sa_model.model_name
-            model_info: ModelInfo = self._models[model_name]
-            if not self.saving_accounts_models.get(sa_model.segment):
-                self.saving_accounts_models[sa_model.segment] = {}
-            self.saving_accounts_models[sa_model.segment][
-                sa_model.model_trainer.prediction_type
-            ] = self._model_register.get_model(model_info)
+            segment_key = sa_model.segment
+            if segment_key is None:
+                raise ValueError(
+                    f"Segment is not defined for saving accounts model '{sa_model.model_name}'"
+                )
+
+            model_name = sa_model.model_name
+            model_info = self._resolve_model_info(model_name)
+            if not self.saving_accounts_models.get(segment_key):
+                self.saving_accounts_models[segment_key] = {}
+            trainer = sa_model.model_trainer
+            prediction_type = getattr(trainer, "prediction_type", None)
+            if not isinstance(prediction_type, str):
+                raise AttributeError(
+                    f"Model trainer for '{model_name}' does not define prediction_type"
+                )
+            self.saving_accounts_models[segment_key][prediction_type] = (
+                self._model_register.get_model(model_info)
+            )
 
     def _set_current_accounts_models(self) -> None:
         self.current_accounts_models: Dict[str, BaseModel] = {}
         for ca_model in CurrentAccounts.models:
-            model_name: str = ca_model.model_name
-            model_info: ModelInfo = self._models[model_name]
-            self.current_accounts_models[ca_model.model_trainer.prediction_type] = (
-                self._model_register.get_model(model_info)
+            model_name = ca_model.model_name
+            model_info = self._resolve_model_info(model_name)
+            trainer = ca_model.model_trainer
+            prediction_type = getattr(trainer, "prediction_type", None)
+            if not isinstance(prediction_type, str):
+                raise AttributeError(
+                    f"Model trainer for '{model_name}' does not define prediction_type"
+                )
+            self.current_accounts_models[prediction_type] = self._model_register.get_model(
+                model_info
             )
 
     def _add_scenario_to_model_data(self, forecast_date: datetime) -> None:
@@ -1120,13 +1167,23 @@ class DepositIterativeCalculator(AbstractCalculator):
         # вывод таблицы итоговых объемов
         #         volumes_table = self._volumes_table(agg_data, sa_data, ca_data)
 
+        deposits_key = self._enum_name(
+            cast(DepositsCalculationType, DepositsCalculationType.Deposits)
+        )
+        savings_key = self._enum_name(
+            cast(DepositsCalculationType, DepositsCalculationType.SavingAccounts)
+        )
+        current_accounts_key = self._enum_name(
+            cast(DepositsCalculationType, DepositsCalculationType.CurrentAccounts)
+        )
+
         return CalculationResult(
             calc_type,
             self._scenario,
             {
-                DepositsCalculationType.Deposits.name: calculated_data,
-                DepositsCalculationType.SavingAccounts.name: sa_data,
-                DepositsCalculationType.CurrentAccounts.name: ca_data,
+                deposits_key: calculated_data,
+                savings_key: sa_data,
+                current_accounts_key: ca_data,
                 #                                                             'Volumes': volumes_table,
                 #                                                             'forecast_values': forecast_values,
                 "model_data": self._forecast_context.model_data[
