@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+"""SQLAlchemy models and helper object for persisting calculator artefacts."""
+
 import logging
+import logging.config
 from collections import defaultdict
 from datetime import datetime
 from os.path import basename, splitext
 from typing import Any, Dict, List, Optional, Tuple
 
-"""SQLAlchemy models and helper object for persisting calculator artefacts."""
-
-import pandas as pd
-from sqlalchemy import (
+import pandas as pd  # type: ignore[import-untyped]
+from sqlalchemy import (  # type: ignore[import-not-found]
     Column,
     Integer,
     Float,
@@ -20,20 +21,23 @@ from sqlalchemy import (
     create_engine,
     UniqueConstraint,
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import backref, relationship, sessionmaker
+from sqlalchemy.orm import (  # type: ignore[import-not-found]
+    DeclarativeMeta,
+    backref,
+    declarative_base,
+    relationship,
+    sessionmaker,
+)
 
 from core.calculator.core.settings import Settings
 
+from core.upfm.commons import ModelInfo
 
 logging.config.dictConfig(Settings.LOGGING_CONFIG)
 logger = logging.getLogger("core")
 
 
-from core.upfm.commons import ModelInfo
-
-
-Base = declarative_base()
+Base: DeclarativeMeta = declarative_base()
 
 
 class ModelInfoEntity(Base):
@@ -412,9 +416,9 @@ class ModelDB:
         res: bool = False
         model_info_: ModelInfoEntity = ModelInfoEntity()
         if overwrite:
-            existed_model_: ModelInfoEntity = self.find_model(name)
-            if existed_model_:
-                model_info_ = existed_model_
+            existed_model: Optional[ModelInfoEntity] = self.find_model(name)
+            if existed_model is not None:
+                model_info_ = existed_model
 
         model_info_.name = name
         model_info_.mart = mart
@@ -430,10 +434,11 @@ class ModelDB:
         return res
 
     def update_trained_model(self, e: TrainedModelEntity) -> None:
-        res: bool = False
         existing_: Optional[TrainedModelEntity] = self.find_trained_model(e.file_name)
 
-        if existing_:
+        target = existing_ if existing_ is not None else e
+
+        if existing_ is not None:
             existing_.file_name = e.file_name
             existing_.train_start_dt = e.train_start_dt
             existing_.train_end_dt = e.train_end_dt
@@ -441,9 +446,8 @@ class ModelDB:
             existing_.saved_at = datetime.now()
 
         try:
-            self._db_session.add(existing_)
+            self._db_session.add(target)
             self._db_session.commit()
-            res = True
         except Exception as e:
             self._db_session.rollback()
             logger.exception(e)
@@ -458,7 +462,7 @@ class ModelDB:
         if create_model_info:
             self.save_model_info(model_name)
         model_info_: Optional[ModelInfoEntity] = self.find_model(model_name)
-        if model_info_:
+        if model_info_ is not None:
             try:
                 model_info_.trained_models.extend(trained_models)
                 self._db_session.commit()
@@ -479,8 +483,14 @@ class ModelDB:
         info_: ModelInfo = ModelInfo.from_str(fname_)
         trained_model_: TrainedModelEntity = TrainedModelEntity()
         trained_model_.file_name = fname_
-        trained_model_.train_start_dt = info_.training_period.start_dt
-        trained_model_.train_end_dt = info_.training_period.end_dt
+        training_period = info_.training_period
+        if training_period is None:
+            raise ValueError(
+                f"Model path {trained_model_file} does not encode a training period"
+            )
+
+        trained_model_.train_start_dt = training_period.start_dt
+        trained_model_.train_end_dt = training_period.end_dt
         trained_model_.saved_at = datetime.now()
         with open(trained_model_file, "rb") as model_file:
             trained_model_.model_data = model_file.read()
@@ -497,8 +507,12 @@ class ModelDB:
             info_: ModelInfo = ModelInfo.from_str(fname_)
             trained_model_: TrainedModelEntity = TrainedModelEntity()
             trained_model_.file_name = fname_
-            trained_model_.train_start_dt = info_.training_period.start_dt
-            trained_model_.train_end_dt = info_.training_period.end_dt
+            training_period = info_.training_period
+            if training_period is None:
+                raise ValueError(f"Model path {f_} does not encode a training period")
+
+            trained_model_.train_start_dt = training_period.start_dt
+            trained_model_.train_end_dt = training_period.end_dt
             trained_model_.saved_at = datetime.now()
             with open(f_, "rb") as model_file:
                 trained_model_.model_data = model_file.read()
@@ -511,16 +525,36 @@ class ModelDB:
 
     def find_prediction_data(
         self, name: str, from_dt: datetime, to: datetime
-    ) -> None:
-        pass
+    ) -> Optional[Dict[str, pd.DataFrame]]:
+        return None
 
-    def find_portfolio(self, name: str, portfolio_dt: datetime) -> None:
-        pass
+    def save_prediction_data(
+        self,
+        name: str,
+        from_dt: datetime,
+        to: datetime,
+        data: Dict[str, pd.DataFrame],
+    ) -> None:
+        logger.debug("save_prediction_data is not implemented")
+
+    def find_portfolio(
+        self, name: str, portfolio_dt: datetime
+    ) -> Optional[Dict[str, pd.DataFrame]]:
+        return None
 
     def find_ground_truth(
         self, name: str, from_dt: datetime, to: datetime
+    ) -> Optional[Dict[str, pd.DataFrame]]:
+        return None
+
+    def save_ground_truth(
+        self,
+        name: str,
+        from_dt: datetime,
+        to: datetime,
+        data: Dict[str, pd.DataFrame],
     ) -> None:
-        pass
+        logger.debug("save_ground_truth is not implemented")
 
     def save_backtest(self, backtest_info: BackTestInfoEntity) -> bool:
         logger.info("saving backtest info")
@@ -558,22 +592,26 @@ class ModelDB:
         if len(rs_list) > 0:
             folio_entity = rs_list[0]
 
-        if not folio_entity:
+        if folio_entity is None:
             folio_entity = PortfolioEntity()
             folio_entity.portfolio_dt = portfolio_dt
             model_info = self.find_model(name)
-            if not model_info:
+            if model_info is None:
                 self.save_model_info(name)
+                model_info = self.find_model(name)
 
-        model_info_: ModelInfoEntity = self.find_model(model_name)
-        if model_info_:
-            try:
-                model_info_.trained_models.extend(trained_models)
-                self._db_session.commit()
-                res = True
-            except Exception as e:
-                self._db_session.rollback()
-                logger.error(e)
+            if model_info is None:
+                raise ValueError(f"Unable to resolve model info for {name}")
+
+            folio_entity.model_info = model_info
+
+        folio_entity.saved_at = datetime.now()
+        try:
+            self._db_session.add(folio_entity)
+            self._db_session.commit()
+        except Exception as e:
+            self._db_session.rollback()
+            logger.error(e)
 
 
 def init_engine(db_url: str) -> Tuple[Any, Any]:

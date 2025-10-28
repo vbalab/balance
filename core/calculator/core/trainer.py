@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import logging
+import logging.config
 from datetime import datetime
 from io import BytesIO
 from os import makedirs, path
 from typing import Dict, List, Optional, Tuple
 
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession  # type: ignore[import-not-found]
 
 from core.calculator.storage import ModelDB
-from core.upfm.commons import ModelTrainer, ModelInfo
+from core.upfm.commons import ModelInfo, ModelTrainer
 from core.calculator.core import Settings, ModelRegister
 
 logging.config.dictConfig(Settings.LOGGING_CONFIG)
@@ -66,7 +67,7 @@ class TrainingManager:
         try:
             trainer: ModelTrainer = self._trainers[tag]
             end_dt: datetime = self._end_dates[step]
-            model_path: str = trainer.save_trained_model(
+            model_path = trainer.save_trained_model(
                 self._spark,
                 self._model_folder,
                 end_dt,
@@ -74,9 +75,13 @@ class TrainingManager:
             )
 
             if model_path:
-                self._trained_models[(step, tag)] = ModelInfo.from_str(
-                    path.splitext(model_path)[0]
-                )
+                model_info = ModelInfo.from_str(path.splitext(model_path)[0])
+                if model_info.training_period is None:
+                    raise ValueError(
+                        f"Model path {model_path} does not encode a training period"
+                    )
+
+                self._trained_models[(step, tag)] = model_info
 
                 if self._db:
                     self._db.save_trained_model(
@@ -137,7 +142,7 @@ class TrainingManager:
 
         self._create_folders()
 
-        self._end_dates: Dict[int, datetime] = dict(enumerate(end_dates, start=1))
+        self._end_dates = dict(enumerate(end_dates, start=1))
 
         if self._force_training:
             self._train_models()
@@ -150,10 +155,7 @@ class TrainingManager:
     def get_models_by_step(self, step: int) -> Dict[str, ModelInfo]:
         """Return the models trained for a given *step*."""
 
-        return {
-            tag: self._trained_models[(step, tag)].to_model_info()
-            for tag in self._trainers
-        }
+        return {tag: self._trained_models[(step, tag)] for tag in self._trainers}
 
     @property
     def trained_models(self) -> Dict[Tuple[int, str], ModelInfo]:
@@ -165,7 +167,7 @@ class TrainingManager:
         """Train models for a single *end_dt* cutoff."""
 
         self._create_folders()
-        self._end_dates: Dict[int, datetime] = {1: end_dt}
+        self._end_dates = {1: end_dt}
 
         if self._force_training:
             self._train_models()

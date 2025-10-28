@@ -3,11 +3,12 @@ from __future__ import annotations
 """Engines dedicated to running single-step forecast calculations."""
 
 import logging
+import logging.config
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 
 from core.calculator.storage import ModelDB
 from core.upfm.commons import DataLoader, MLException, ModelInfo, Scenario
@@ -35,31 +36,40 @@ class ForecastConfig(BaseConfig):
     def portfolio_dt(self) -> datetime:
         """Convenience accessor for the portfolio snapshot date."""
 
+        if self.first_train_end_dt is None:
+            raise ValueError("first_train_end_dt must be provided for forecasts")
+
         return self.first_train_end_dt
 
     @property
     def train_ends(self) -> List[datetime]:
         """Return the training end dates used by the forecast."""
 
-        return [self.first_train_end_dt]
+        return [self.portfolio_dt]
 
     @property
-    def forecast_dates(self) -> List[datetime]:
+    def forecast_dates(self) -> Dict[int, List[datetime]]:
         """Return the forecast horizon associated with this run."""
 
-        return list(self._forecast_dates().values())[0]
+        return self._forecast_dates()
+
+    @property
+    def horizon_dates(self) -> List[datetime]:
+        """Convenience accessor returning the single-step forecast horizon."""
+
+        return list(self.forecast_dates.values())[0]
 
 
-class ForecastEngine(AbstractEngine):
+class ForecastEngine(AbstractEngine[ForecastConfig]):
     """Engine responsible for orchestrating a single forecast step."""
 
     STEP_KEY = 1
 
     @property
-    def calc_results(self) -> Dict[str, pd.DataFrame]:
+    def calculated_frames(self) -> Dict[str, pd.DataFrame]:
         """Expose the calculated data frame dictionary."""
 
-        return self._calc_results[STEP_KEY].calculated_data
+        return self._calc_results[self.STEP_KEY].calculated_data
 
     def _create_calc(self) -> AbstractCalculator:
         """Instantiate the configured calculator for the forecast."""
@@ -67,20 +77,33 @@ class ForecastEngine(AbstractEngine):
         dt_: datetime = self._config.train_ends[0]
 
         models: Dict[str, ModelInfo] = {
-            tag: self.trained_models[(STEP_KEY, tag)] for tag in self._config.trainers
+            tag: self.trained_models[(self.STEP_KEY, tag)]
+            for tag in self._config.trainers
         }
+
+        scenario_data = self._config.scenario_data
+        if scenario_data is None:
+            raise ValueError("scenario_data must be provided for forecast execution")
+
+        portfolio = self._config.portfolio
+        if portfolio is None:
+            raise ValueError("portfolio must be provided for forecast execution")
 
         scenario_: Scenario = Scenario(
             dt_,
             self._config.horizon,
-            self._config.scenario_data,
+            scenario_data,
         )
         model_data: Dict[str, Any] = {
-            "portfolio": {dt_: self._config.portfolio},
+            "portfolio": {dt_: portfolio},
             "features": pd.DataFrame().rename_axis("report_dt"),
         }
 
-        return self._config.calculator_type(
+        calculator_cls = self._config.calculator_type
+        if calculator_cls is None:
+            raise ValueError("calculator_type must be provided for forecast execution")
+
+        return calculator_cls(
             self.register,
             models,
             scenario_,
@@ -90,13 +113,18 @@ class ForecastEngine(AbstractEngine):
     def run_all(self) -> None:
         """Train required models and execute the calculator once."""
 
+        if self._config.first_train_end_dt is None:
+            raise ValueError("first_train_end_dt must be provided for forecasts")
+
+        model_db = self._training_manager._db
+        if model_db is None:
+            raise ValueError("Training manager is not configured with a model database")
+
         n_models = len(
-            self._training_manager._db.find_trained_model_by_dt1(
-                end_dt=self._config.first_train_end_dt
-            )
+            model_db.find_trained_model_by_dt1(end_dt=self._config.first_train_end_dt)
         )
 
-        if (n_models < 42) & (self._training_manager._spark is None):  # TODO: `42` ???
+        if (n_models < 42) and (self._training_manager._spark is None):  # TODO: `42` ???
             raise MLException(
                 f"Модель не поддерживает временной период: {self._config.train_ends[0]}"
             )
@@ -108,7 +136,10 @@ class ForecastEngine(AbstractEngine):
         self.calc: AbstractCalculator = self._create_calc()
 
         logger.info("calculation started")
-        self._calc_results[STEP_KEY] = self.calc.calculate(self._config.calc_type)
+        if self._config.calc_type is None:
+            raise ValueError("calc_type must be provided for forecast execution")
+
+        self._calc_results[self.STEP_KEY] = self.calc.calculate(self._config.calc_type)
 
     def save_to_db(
         self,
@@ -121,13 +152,13 @@ class ForecastEngine(AbstractEngine):
         pass
 
 
-class ForecastEngine1(AbstractEngine):  # TODO: delete?
+class ForecastEngine1(AbstractEngine[ForecastConfig]):  # TODO: delete?
     """Legacy forecast engine variant that loads portfolio data explicitly."""
 
     STEP_KEY = 1
 
     @property
-    def calc_results(self) -> CalculationResult:
+    def calculation_result(self) -> CalculationResult:
         """Return the raw :class:`CalculationResult` object."""
 
         return self._calc_results[ForecastEngine.STEP_KEY]
@@ -149,14 +180,20 @@ class ForecastEngine1(AbstractEngine):  # TODO: delete?
             tag: self.trained_models[(ForecastEngine.STEP_KEY, tag)]
             for tag in self._config.trainers
         }
-        scenario_: Scenario = Scenario(
-            dt_, self._config.horizon, self._config.scenario_data
-        )
+        scenario_data = self._config.scenario_data
+        if scenario_data is None:
+            raise ValueError("scenario_data must be provided for forecast execution")
+
+        scenario_: Scenario = Scenario(dt_, self._config.horizon, scenario_data)
         model_data: Dict[str, Any] = {
             f"{tag}_portfolio": self._portfolio_data[(ForecastEngine.STEP_KEY, tag)]
             for tag in self._config.data_loaders
         }
-        return self._config.calculator_type(
+        calculator_cls = self._config.calculator_type
+        if calculator_cls is None:
+            raise ValueError("calculator_type must be provided for forecast execution")
+
+        return calculator_cls(
             self.register, models, scenario_, model_data
         )
 
@@ -170,6 +207,9 @@ class ForecastEngine1(AbstractEngine):  # TODO: delete?
         logger.info("portfolio loading completed")
         calc: AbstractCalculator = self._create_calc()
         logger.info("calculation started")
+        if self._config.calc_type is None:
+            raise ValueError("calc_type must be provided for forecast execution")
+
         self._calc_results[ForecastEngine.STEP_KEY] = calc.calculate(
             self._config.calc_type
         )

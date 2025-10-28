@@ -3,14 +3,15 @@ from __future__ import annotations
 """Execution engines that train models and run calculators."""
 
 import logging
+import logging.config
 import pickle
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
-import pandas as pd
-from pyspark.sql import SparkSession
+import pandas as pd  # type: ignore[import-untyped]
+from pyspark.sql import SparkSession  # type: ignore[import-not-found]
 
 from core.calculator.storage import ModelDB
 from core.upfm.commons import BaseModel, DataLoader, ModelInfo, ModelTrainer
@@ -35,70 +36,92 @@ class BaseConfig:
 
     first_train_end_dt: Optional[datetime] = None
     horizon: int = 1  # TODO: check if necessary here
-    trainers: Optional[Dict[str, ModelTrainer]] = None
-    model_params: Optional[Dict[str, Dict[str, ModelTrainer]]] = None
-    data_loaders: Optional[Dict[str, DataLoader]] = None
+    trainers: Dict[str, ModelTrainer] = field(default_factory=dict)
+    model_params: Dict[str, Dict[str, ModelTrainer]] = field(default_factory=dict)
+    data_loaders: Dict[str, DataLoader] = field(default_factory=dict)
     calculator_type: Optional[Type[AbstractCalculator]] = None
     calc_type: Optional[CalculationType] = None
-    adapter_types: Optional[Dict[str, Type[BaseModel]]] = None
+    adapter_types: Dict[str, Type[BaseModel]] = field(default_factory=dict)
+    steps: int = 1
 
     @property
     def first_dt_str(self) -> str:
         """Return ``first_train_end_dt`` formatted for logging."""
 
+        if self.first_train_end_dt is None:
+            raise ValueError("first_train_end_dt must be set")
+
         return self.first_train_end_dt.strftime("%Y-%m-%d")
 
-    def _get_dates(self) -> List[datetime]:
+    def _get_dates(self, steps: Optional[int] = None) -> List[datetime]:
         """Internal helper returning the training/forecast schedule."""
+
+        if self.first_train_end_dt is None:
+            raise ValueError("first_train_end_dt must be set before computing dates")
+
+        steps_count = steps if steps is not None else self.steps
 
         datarange = pd.date_range(
             self.first_train_end_dt,
-            periods=self.horizon * steps_ + 1,
+            periods=self.horizon * steps_count + 1,
             freq="M",
         )
 
-        dates: List[datetime] = list(map(lambda x: x.to_pydatetime(), datarange))
+        dates: List[datetime] = [dt.to_pydatetime() for dt in datarange]
         return dates
 
     def _train_ends(self) -> List[datetime]:
         """Return the chronological list of training end dates."""
 
-        dates = _get_dates()
+        dates = self._get_dates()
 
         return dates[:: self.horizon][:-1]
 
     def _forecast_dates(self, steps_: int = 1) -> Dict[int, List[datetime]]:
         """Return mapping from step index to forecast horizon dates."""
 
-        dates = _get_dates()
+        dates = self._get_dates(steps_)
 
         return {
             s: dates[1 + (s - 1) * self.horizon : 1 + s * self.horizon]
             for s in range(1, steps_ + 1)
         }
 
+    @property
+    def train_ends(self) -> List[datetime]:
+        """Expose the cached training end dates."""
 
-T = TypeVar("T", bound="AbstractEngine")
+        return self._train_ends()
+
+    @property
+    def forecast_dates(self) -> Dict[int, List[datetime]]:
+        """Expose the scheduled forecast horizons per step."""
+
+        return self._forecast_dates(self.steps)
 
 
-class AbstractEngine(ABC):
+T = TypeVar("T", bound="AbstractEngine[Any]")
+C = TypeVar("C", bound=BaseConfig)
+
+
+class AbstractEngine(Generic[C], ABC):
     """Coordinate model training, data preparation and calculator execution."""
 
     def __init__(
         self,
         spark: SparkSession,
         # TODO: double work:
-        config: BaseConfig,  # BaseConfig -> trainers: Dict[str, ModelTrainer]
+        config: C,
         training_manager: TrainingManager,  # TrainingManager -> trainers: Dict[str, ModelTrainer]
         overwrite_models=True,
     ) -> None:
         self._spark: SparkSession = spark
-        self._config: BaseConfig = config
+        self._config: C = config
         self._overwrite_models: bool = overwrite_models
         self._training_manager: TrainingManager = training_manager
 
         self._register: ModelRegister = ModelRegister(
-            adapter_types=self._config.adapter_types
+            adapter_types=self._config.adapter_types or None
         )
         self._portfolio_data: Dict[Tuple[int, str], pd.DataFrame] = {}
         self._calc_results: Dict[int, CalculationResult] = {}
@@ -175,7 +198,7 @@ class AbstractEngine(ABC):
         return ""
 
     @classmethod
-    def load_from_file(cls, path: str) -> T:
+    def load_from_file(cls: Type[T], path: str) -> T:
         """Load a previously serialized engine from *path*."""
 
         with open(path, "rb") as fo:
