@@ -338,7 +338,9 @@ class BackTestHonestEngine(AbstractEngine[BackTestHonestConfig]):
 
         calculator_cls = self._config.calculator_type
         if calculator_cls is None:
-            raise ValueError("calculator_type must be provided for honest backtest execution")
+            raise ValueError(
+                "calculator_type must be provided for honest backtest execution"
+            )
 
         return calculator_cls(
             self.register,

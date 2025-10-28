@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Tools that analyse calculator outputs and produce metrics or charts."""
 
 from abc import ABC, abstractmethod
@@ -161,9 +162,7 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
             metric_name
         )
 
-    def _apply_all_metrcis(
-        self, results_df_agg: DataFrameGroupBy
-    ) -> pd.DataFrame:
+    def _apply_all_metrcis(self, results_df_agg: DataFrameGroupBy) -> pd.DataFrame:
         """Apply all configured metrics to the provided aggregation."""
 
         output: List[pd.Series] = []

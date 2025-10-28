@@ -174,7 +174,9 @@ class DynbalanceCalculatorAnalyzer(CalculatorAnalyzer):
             )
 
     def _apply_metrics(
-        self, pred: Union[pd.DataFrame, pd.Series], truth: Union[pd.DataFrame, pd.Series]
+        self,
+        pred: Union[pd.DataFrame, pd.Series],
+        truth: Union[pd.DataFrame, pd.Series],
     ) -> Dict[str, Any]:
         """Apply every configured metric to the provided data."""
 

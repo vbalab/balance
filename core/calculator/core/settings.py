@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any, Dict
 
 
-log_format_: str = "%(asctime)s - [%(levelname)s] - %(name)s - %(filename)s.%(funcName)s:%(lineno)d - %(message)s"
+log_format_: str = (
+    "%(asctime)s - [%(levelname)s] - %(name)s - %(filename)s.%(funcName)s:%(lineno)d - %(message)s"
+)
 
 
 class Settings:

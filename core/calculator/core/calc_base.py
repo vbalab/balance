@@ -57,9 +57,7 @@ class ModelRegister:
 
         self._models: Dict[ModelInfo, BaseModel] = {}
 
-    def _find_adapter_type(
-        self, model_info_: ModelInfo
-    ) -> Optional[Type[BaseModel]]:
+    def _find_adapter_type(self, model_info_: ModelInfo) -> Optional[Type[BaseModel]]:
         """Return a model adapter type for the provided :class:`ModelInfo`."""
 
         adapter_type_: Optional[Type[BaseModel]] = None
@@ -107,7 +105,9 @@ class ModelRegister:
         logger.info("add_models_from_bytes")
 
         for model_info, data in model_data.items():
-            adapter_type: Optional[Type[BaseModel]] = self._find_adapter_type(model_info)
+            adapter_type: Optional[Type[BaseModel]] = self._find_adapter_type(
+                model_info
+            )
 
             if not adapter_type:
                 logger.warning(f"missing adapter for {model_info}")

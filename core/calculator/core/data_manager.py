@@ -24,9 +24,7 @@ class DataLoaderProxy:  # TODO: check if even used
         self._data_db: Optional[ModelDB] = data_db
         self._save_data: bool = save_data
 
-    def get_prediction_data(
-        self, loader: str, from_dt: datetime, to: datetime
-    ) -> Any:
+    def get_prediction_data(self, loader: str, from_dt: datetime, to: datetime) -> Any:
         """Return prediction features for *loader* between *from_dt* and *to*."""
 
         prediction_data: Any = None
@@ -37,15 +35,11 @@ class DataLoaderProxy:  # TODO: check if even used
                 self._spark, from_dt, to
             )
             if self._save_data and self._data_db is not None:
-                self._data_db.save_prediction_data(
-                    loader, from_dt, to, prediction_data
-                )
+                self._data_db.save_prediction_data(loader, from_dt, to, prediction_data)
 
         return prediction_data
 
-    def get_ground_truth(
-        self, loader: str, from_dt: datetime, to: datetime
-    ) -> Any:
+    def get_ground_truth(self, loader: str, from_dt: datetime, to: datetime) -> Any:
         """Return ground truth for *loader* between *from_dt* and *to*."""
 
         ground_truth: Any = None

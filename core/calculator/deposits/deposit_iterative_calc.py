@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from enum import auto
 from functools import reduce
+
 """Iterative deposit calculator assembling numerous component models."""
 
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd

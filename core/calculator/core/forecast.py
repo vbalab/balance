@@ -124,7 +124,9 @@ class ForecastEngine(AbstractEngine[ForecastConfig]):
             model_db.find_trained_model_by_dt1(end_dt=self._config.first_train_end_dt)
         )
 
-        if (n_models < 42) and (self._training_manager._spark is None):  # TODO: `42` ???
+        if (n_models < 42) and (
+            self._training_manager._spark is None
+        ):  # TODO: `42` ???
             raise MLException(
                 f"Модель не поддерживает временной период: {self._config.train_ends[0]}"
             )
@@ -193,9 +195,7 @@ class ForecastEngine1(AbstractEngine[ForecastConfig]):  # TODO: delete?
         if calculator_cls is None:
             raise ValueError("calculator_type must be provided for forecast execution")
 
-        return calculator_cls(
-            self.register, models, scenario_, model_data
-        )
+        return calculator_cls(self.register, models, scenario_, model_data)
 
     def run_all(self) -> None:
         """Run the legacy workflow, including portfolio loading."""
