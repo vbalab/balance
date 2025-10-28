@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import logging.config
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -11,7 +12,7 @@ from io import BytesIO
 from os import path
 from typing import Any, Dict, Iterable, Optional, Type
 
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 
 from core.calculator.core import Settings
 from core.upfm.commons import ModelInfo, BaseModel, Scenario, ForecastContext
@@ -150,22 +151,19 @@ class AbstractCalculator(ABC):
     def __init__(
         self,
         model_register: ModelRegister,
-        models: Dict[
-            str, ModelInfo
-        ],  # TODO: this is in ModelRegister already, because `str` here is ModelPrefix in `model_register.adapter_types[str]`
+        models: Dict[str, ModelInfo],
         # TODO: receive ForecastContext, not scenario & model_data
         scenario: Scenario,
-        model_data: Dict[str, Any] = None,
+        model_data: Optional[Dict[str, Any]] = None,
     ) -> None:
         self._model_register: ModelRegister = model_register
         self._models: Dict[str, ModelInfo] = models
         self._scenario: Scenario = scenario
         self._forecast_context = ForecastContext(
-            # TODO: you see how strange it is to have scenario data in ForecastContext with scenario itself
             scenario.portfolio_dt,
             scenario.horizon,
             scenario,
-            model_data,
+            model_data or {},
         )
         # TODO: this class has BaseModel & ForecastContext -> FullFitPredictModel
 
@@ -185,7 +183,7 @@ class SingleModelCalculator(AbstractCalculator):  # TODO: check if used at all
         model_register: ModelRegister,
         models: Dict[str, ModelInfo],
         scenario: Scenario,
-        model_data: Dict[str, Any] = None,
+        model_data: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__(model_register, models, scenario, model_data)
 

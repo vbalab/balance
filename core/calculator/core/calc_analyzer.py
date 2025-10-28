@@ -5,9 +5,12 @@ from abc import ABC, abstractmethod
 from functools import reduce
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import pandas as pd
-import plotly.graph_objects as go
-from sklearn.metrics import (
+import pandas as pd  # type: ignore[import-untyped]
+from pandas.core.groupby.generic import (  # type: ignore[import-untyped]
+    DataFrameGroupBy,
+)
+import plotly.graph_objects as go  # type: ignore[import-not-found]
+from sklearn.metrics import (  # type: ignore[import-not-found]
     max_error,
     mean_absolute_error,
     mean_absolute_percentage_error,
@@ -148,7 +151,7 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
 
     @staticmethod
     def _apply_metric(
-        results_df_agg: pd.core.groupby.generic.DataFrameGroupBy,
+        results_df_agg: DataFrameGroupBy,
         metric_name: str,
         metric_func: MetricFunc,
     ) -> pd.Series:
@@ -159,7 +162,7 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
         )
 
     def _apply_all_metrcis(
-        self, results_df_agg: pd.core.groupby.generic.DataFrameGroupBy
+        self, results_df_agg: DataFrameGroupBy
     ) -> pd.DataFrame:
         """Apply all configured metrics to the provided aggregation."""
 
@@ -184,7 +187,9 @@ class SimpleCalculatorAnalyzer(CalculatorAnalyzer):
             "overall_metrcis": overall_metrcis,
         }
 
-    def get_metrics(self, engine: BackTestEngine) -> Dict[str, Dict[str, pd.DataFrame]]:
+    def get_metrics(
+        self, engine: BackTestEngine
+    ) -> Dict[Tuple[str, str], Dict[str, pd.DataFrame]]:
         """Return metrics for every configured forecast/target pair."""
 
         results_dict: Dict[Tuple[str, str], pd.DataFrame] = self._get_results_dict(
@@ -310,7 +315,7 @@ class SymbolicCalculatorAnalyzer(SimpleCalculatorAnalyzer):
     def __init__(
         self,
         path_dict: Dict[Tuple[str, str], Tuple[str, str]],
-        metrics: Dict[str, MetricFunc] = None,
+        metrics: Optional[Dict[str, MetricFunc]] = None,
     ) -> None:
         """Initialise the analyser with optional custom metrics."""
         metrics_to_use = metrics if metrics is not None else BASIC_METRICS

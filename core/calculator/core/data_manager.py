@@ -30,14 +30,16 @@ class DataLoaderProxy:  # TODO: check if even used
         """Return prediction features for *loader* between *from_dt* and *to*."""
 
         prediction_data: Any = None
-        if self._data_db:
-            prediction_data = data_db.find_prediction_data(loader, from_dt, to)
+        if self._data_db is not None:
+            prediction_data = self._data_db.find_prediction_data(loader, from_dt, to)
         if not prediction_data:
             prediction_data = self._loaders[loader].get_prediction_data(
                 self._spark, from_dt, to
             )
-            if self._save_data and self._data_db:
-                data_db.save_prediction_data(loader, from_dt, to, prediction_data)
+            if self._save_data and self._data_db is not None:
+                self._data_db.save_prediction_data(
+                    loader, from_dt, to, prediction_data
+                )
 
         return prediction_data
 
@@ -47,14 +49,14 @@ class DataLoaderProxy:  # TODO: check if even used
         """Return ground truth for *loader* between *from_dt* and *to*."""
 
         ground_truth: Any = None
-        if self._data_db:
-            ground_truth = data_db.find_ground_truth(loader, from_dt, to)
+        if self._data_db is not None:
+            ground_truth = self._data_db.find_ground_truth(loader, from_dt, to)
         if not ground_truth:
             ground_truth = self._loaders[loader].get_ground_truth(
                 self._spark, from_dt, to
             )
-            if self._save_data and self._data_db:
-                data_db.save_ground_truth(loader, from_dt, to, prediction_data)
+            if self._save_data and self._data_db is not None:
+                self._data_db.save_ground_truth(loader, from_dt, to, ground_truth)
 
         return ground_truth
 
@@ -62,12 +64,12 @@ class DataLoaderProxy:  # TODO: check if even used
         """Return portfolio snapshot for *loader* at *portfolio_dt*."""
 
         portfolio: Any = None
-        if self._data_db:
-            portfolio = data_db.find_portfolio(loader, portfolio_dt)
+        if self._data_db is not None:
+            portfolio = self._data_db.find_portfolio(loader, portfolio_dt)
         if not portfolio:
             print(f"portfolio_dt {portfolio_dt}")
             portfolio = self._loaders[loader].get_portfolio(self._spark, portfolio_dt)
-            if self._save_data and self._data_db:
-                data_db.save_portfolio(loader, portfolio_dt, portfolio)
+            if self._save_data and self._data_db is not None:
+                self._data_db.save_portfolio(loader, portfolio_dt, portfolio)
 
         return portfolio

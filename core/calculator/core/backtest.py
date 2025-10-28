@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
+import logging.config
 from dataclasses import dataclass
 from datetime import datetime
 from functools import reduce
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-import pandas as pd
-from pyspark.sql import SparkSession
+import pandas as pd  # type: ignore[import-untyped]
+from pyspark.sql import SparkSession  # type: ignore[import-not-found]
 
 from core.upfm.commons import (
     DataLoader,
@@ -24,7 +25,8 @@ from core.calculator.core import (
     Settings,
     TrainingManager,
 )
-from core.calculator.storage import ModelDB, BackTestInfoEntity, BackTestDataEntity
+from core.calculator.storage import ModelDB, BackTestDataEntity, BackTestInfoEntity
+
 logging.config.dictConfig(Settings.LOGGING_CONFIG)
 logger = logging.getLogger("core")
 
@@ -48,7 +50,7 @@ class BackTestConfig(BaseConfig):
         return self._forecast_dates(self.steps)
 
 
-class BackTestEngine(AbstractEngine):
+class BackTestEngine(AbstractEngine[BackTestConfig]):
     """Engine that orchestrates multi-step backtesting workflows."""
 
     # TODO: better move to definitions.py
@@ -88,7 +90,8 @@ class BackTestEngine(AbstractEngine):
         start_dt: datetime = self._config.forecast_dates[step][0]
         end_dt: datetime = self._config.forecast_dates[step][-1]
 
-        loader: DataLoader = self._config.data_loaders[tag]
+        loaders = self._config.data_loaders
+        loader: DataLoader = loaders[tag]
 
         self._prediction_data[(step, tag)] = loader.get_prediction_data(
             self._spark, start_dt, end_dt
@@ -138,7 +141,11 @@ class BackTestEngine(AbstractEngine):
             for tag in self._config.data_loaders
         }
 
-        return self._config.calculator_type(
+        calculator_cls = self._config.calculator_type
+        if calculator_cls is None:
+            raise ValueError("calculator_type must be provided for backtest execution")
+
+        return calculator_cls(
             self.register,
             models,
             scenario,
@@ -152,6 +159,9 @@ class BackTestEngine(AbstractEngine):
             self._load_data(step, tag)
 
         calc = self._create_calculator(step)
+        if self._config.calc_type is None:
+            raise ValueError("calc_type must be provided for backtest execution")
+
         self._calc_results[step] = calc.calculate(self._config.calc_type)
 
     def run_all(self) -> None:
@@ -167,13 +177,16 @@ class BackTestEngine(AbstractEngine):
     def _get_backtest_entity(self, df: pd.DataFrame) -> BackTestInfoEntity:
         """Transform chart data into a database persistence entity."""
 
+        if self._config.calculator_type is None:
+            raise ValueError("calculator_type must be provided for persistence")
+
         backtest_info = BackTestInfoEntity(
             first_train_dt=self._config.first_train_end_dt,
             steps=self._config.steps,
             horizon=self._config.horizon,
             calculator=self._config.calculator_type.__name__,
             calc_type=str(self._config.calc_type),
-            tag=f"{b_info.calculator}_{b_info.horizon}_{b_info.steps}",
+            tag=f"{self._config.calculator_type.__name__}_{self._config.horizon}_{self._config.steps}",
         )
 
         for record in df.to_dict("records"):
@@ -242,13 +255,13 @@ class BackTestHonestConfig(BaseConfig):
         return self._forecast_dates(self.steps)
 
 
-class BackTestHonestEngine(AbstractEngine):
+class BackTestHonestEngine(AbstractEngine[BackTestHonestConfig]):
     """Engine variant that pulls scenario data from dedicated loaders."""
 
     def __init__(
         self,
         spark: SparkSession,
-        config: BackTestConfig,
+        config: BackTestHonestConfig,
         training_manager: TrainingManager,
         overwrite_models: bool = True,
     ) -> None:
@@ -256,9 +269,10 @@ class BackTestHonestEngine(AbstractEngine):
 
         self._training_manager._overwrite_models = overwrite_models
 
+        self._prediction_data: Dict[Tuple[int, str], Dict[str, pd.DataFrame]] = {}
         self._scenario_data: Dict[int, pd.DataFrame] = {}
-        self._portfolio_data: Dict[int, pd.DataFrame] = {}
-        self._ground_truth: Dict[Tuple[int, str], Dict[str, pd.DataFrame]] = {}
+        self._portfolio_snapshots: Dict[int, pd.DataFrame] = {}
+        self._ground_truth: Dict[int, Dict[str, pd.DataFrame]] = {}
 
     @property
     def prediction_data(self) -> Dict[Tuple[int, str], Dict[str, pd.DataFrame]]:
@@ -278,7 +292,7 @@ class BackTestHonestEngine(AbstractEngine):
         }
 
     @property
-    def ground_truth(self) -> Dict[Tuple[int, str], Dict[str, pd.DataFrame]]:
+    def ground_truth(self) -> Dict[int, Dict[str, pd.DataFrame]]:
         """Return ground truth data, loading it lazily when required."""
 
         if not self._ground_truth:
@@ -295,9 +309,13 @@ class BackTestHonestEngine(AbstractEngine):
 
         portfolio_dt = self._config.train_ends[step - 1]
 
-        loader: DataLoader = self._config.scenario_loader
+        loader = self._config.scenario_loader
+        if loader is None:
+            raise ValueError("scenario_loader must be provided for honest backtest")
 
-        self._portfolio_data[step] = loader.get_portfolio(self._spark, portfolio_dt)
+        self._portfolio_snapshots[step] = loader.get_portfolio(
+            self._spark, portfolio_dt
+        )
         self._scenario_data[step] = loader.get_scenario(self._spark, start_dt, end_dt)
 
     def _create_calc(self, step: int) -> AbstractCalculator:
@@ -314,11 +332,15 @@ class BackTestHonestEngine(AbstractEngine):
             self._scenario_data[step],
         )
         model_data: Dict[str, Any] = {
-            "portfolio": {dt_: self._portfolio_data[step]},
+            "portfolio": {dt_: self._portfolio_snapshots[step]},
             "features": pd.DataFrame().rename_axis(_REPORT_DT_COLUMN),
         }
 
-        return self._config.calculator_type(
+        calculator_cls = self._config.calculator_type
+        if calculator_cls is None:
+            raise ValueError("calculator_type must be provided for honest backtest execution")
+
+        return calculator_cls(
             self.register,
             models,
             scenario_,
@@ -330,6 +352,9 @@ class BackTestHonestEngine(AbstractEngine):
 
         self._load_scenario(step)
         self.calc: AbstractCalculator = self._create_calc(step)
+        if self._config.calc_type is None:
+            raise ValueError("calc_type must be provided for honest backtest execution")
+
         self._calc_results[step] = self.calc.calculate(self._config.calc_type)
 
     def run_all(self) -> None:

@@ -1,116 +1,130 @@
+"""Shared domain objects used by the calculator package."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from calendar import monthrange
+from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pickle import load
-from datetime import datetime
-from calendar import monthrange
-from pandas import DataFrame, melt
-from abc import ABC, abstractmethod
-from pyspark.sql import SparkSession
-from dataclasses import dataclass, field
-from pandas.tseries.offsets import MonthEnd
-from typing import Dict, Any, Tuple, List, Type
-from dateutil.relativedelta import relativedelta
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Type
+
+import pandas as pd  # type: ignore[import-untyped]
+from pandas import DataFrame  # type: ignore[import-untyped]
+from pandas.tseries.offsets import MonthEnd  # type: ignore[import-untyped]
+from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
+from pyspark.sql import SparkSession  # type: ignore[import-not-found]
 
 _REPORT_DT_COLUMN = "report_dt"
 
 
 class Products(Enum):
+    """Enumeration of supported product identifiers."""
+
     pass
 
 
 @dataclass(frozen=True)
 class TrainingPeriod:
-    start_dt: datetime
-    end_dt: datetime
+    """Chronological range describing a model training period."""
+
+    start_dt: Optional[datetime]
+    end_dt: Optional[datetime]
 
     def __str__(self) -> str:
         dateformat = "%Y%m"
-        return (
-            f'{self.start_dt.strftime(dateformat) if self.start_dt else ""}'
-            f'{"_" + self.end_dt.strftime(dateformat) if self.end_dt else ""}'
-        )
+        start = self.start_dt.strftime(dateformat) if self.start_dt else ""
+        end = f"_{self.end_dt.strftime(dateformat)}" if self.end_dt else ""
+        return f"{start}{end}"
 
 
 @dataclass(frozen=True)
 class ModelInfo:
+    """Lightweight descriptor uniquely identifying a trained model."""
+
     prefix: str
-    training_period: TrainingPeriod = None
+    training_period: Optional[TrainingPeriod] = None
 
     def __str__(self) -> str:
-        if self.training_period:
-            return f"{self.prefix}_{str(self.training_period)}"
-
+        if self.training_period is not None:
+            return f"{self.prefix}_{self.training_period}"
         return f"{self.prefix}_"
 
     @property
-    def model_key(self):
+    def model_key(self) -> "ModelInfo":
+        """Return a version of the descriptor stripped from training dates."""
+
         return ModelInfo(self.prefix)
 
     @staticmethod
-    def from_str(text: str, separator: str = "_", dateformat="%Y%m"):
-        info_: ModelInfo = ModelInfo(text)
-        try:
-            parts: List[str] = text.split(separator)
-            training_period = None
-            from_dt: datetime = datetime.strptime(parts[-2], dateformat)
-            to_dt: datetime = datetime.strptime(parts[-1], dateformat)
-            training_period = TrainingPeriod(from_dt, to_dt)
-            prefix_: str = separator.join(parts[:-2])
-            info_: ModelInfo = ModelInfo(prefix_, training_period)
-        except Exception:
-            pass
+    def from_str(
+        text: str,
+        separator: str = "_",
+        dateformat: str = "%Y%m",
+    ) -> "ModelInfo":
+        """Parse a :class:`ModelInfo` from its serialised representation."""
 
-        return info_
+        parts: List[str] = text.split(separator)
+        if len(parts) < 3:
+            return ModelInfo(text)
+
+        try:
+            from_dt = datetime.strptime(parts[-2], dateformat)
+            to_dt = datetime.strptime(parts[-1], dateformat)
+        except ValueError:
+            return ModelInfo(text)
+
+        training_period = TrainingPeriod(from_dt, to_dt)
+        prefix = separator.join(parts[:-2])
+        return ModelInfo(prefix, training_period)
 
 
 class MLException(Exception):
-    """Ошибка во время работы модели"""
-
-    def __init__(self, *args, **kwargs):  # real signature unknown
-        pass
+    """Raised when a model reports a domain specific failure."""
 
 
 class Scenario:
-    """
-    Сценарий для прогнозов
-
-    Parameters
-    ----------
-    portfolio_dt: datetime
-        Дата портфолио
-    forecast_horizon: int
-        Горизонт прогноза в месяцах
-    scenario_data: DataFrame
-        Датафрейм с данными сценария
-    """
+    """Input scenario used to drive model forecasts."""
 
     def __init__(
         self, portfolio_dt: datetime, horizon: int, scenario_data: DataFrame
     ) -> None:
         self._portfolio_dt: datetime = portfolio_dt
-        self._horizon = horizon
+        self._horizon: int = horizon
         self._scenario_data: DataFrame = scenario_data
 
     @property
     def forecast_dates(self) -> List[datetime]:
+        """Return forecast horizon dates derived from the portfolio date."""
+
         dates_: List[datetime] = [
-            (self.portfolio_dt + relativedelta(months=m))
+            self.portfolio_dt + relativedelta(months=m)
             for m in range(1, self._horizon + 1)
         ]
         return [dt.replace(day=monthrange(dt.year, dt.month)[1]) for dt in dates_]
 
     @property
     def scenario_data(self) -> DataFrame:
+        """Return the raw scenario data frame."""
+
         return self._scenario_data
 
     @property
     def horizon(self) -> int:
+        """Return the forecast horizon expressed in months."""
+
         return self._horizon
 
     @property
     def portfolio_dt(self) -> datetime:
+        """Return the portfolio snapshot date."""
+
         return self._portfolio_dt
 
-    def subscenario(self, forecast_date: datetime):
+    def subscenario(self, forecast_date: datetime) -> "Scenario":
+        """Create a single-step scenario anchored at ``forecast_date``."""
+
         return Scenario(
             portfolio_dt=(forecast_date + MonthEnd(-1)).to_pydatetime(),
             horizon=1,
@@ -118,44 +132,43 @@ class Scenario:
         )
 
     def unpivot_data(self, column_prefix: str, col_name: str = "name") -> DataFrame:
-        col_names = ["report_dt"] + [
-            col_name
-            for col_name in self.scenario_data_.columns
-            if col_name.startswith(column_prefix)
+        """Return a melted data frame for columns starting with *column_prefix*."""
+
+        column_names = [
+            _REPORT_DT_COLUMN,
+            *[
+                column
+                for column in self.scenario_data.columns
+                if column.startswith(column_prefix)
+            ],
         ]
-        return melt(
-            self.scenario_data_[col_names], id_vars=["report_dt"], value_name=col_name
+        return pd.melt(
+            self._scenario_data[column_names],
+            id_vars=[_REPORT_DT_COLUMN],
+            value_name=col_name,
         )
 
 
 @dataclass
 class ForecastContext:
-    """
-    Контекст прогноза
+    """Container with contextual information passed to models."""
 
-    Parameters
-    ----------
-    portfolio_dt: datetime = None
-        Дата портфолио
+    portfolio_dt: Optional[datetime] = None
     forecast_horizon: int = 0
-        Горизонт прогноза в месяцах
-    scenario: Scenario = None
-        Обьект сценария. Содержит в себе датафрейм scenario_data с данными сценария
-    model_data: Dict[str, Any] = None
-        Словарь с предсказаниями от других моделей.
-        Заполняется по ходу исполнения вычислений в калькуляторе
-    """
-
-    portfolio_dt: datetime = None  # TODO: `scenario` contains `portfolio_dt`
-    forecast_horizon: int = 0  # TODO: `scenario` contains `forecast_horizon`
-    scenario: Scenario = None
+    scenario: Optional[Scenario] = None
     model_data: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def forecast_dates(self) -> List[datetime]:
+        if self.scenario is None:
+            raise ValueError("Scenario is not set for the forecast context")
+
         return self.scenario.forecast_dates
 
-    def subcontext(self, forecast_date):
+    def subcontext(self, forecast_date: datetime) -> "ForecastContext":
+        if self.scenario is None:
+            raise ValueError("Scenario is not set for the forecast context")
+
         return ForecastContext(
             portfolio_dt=(forecast_date + MonthEnd(-1)).to_pydatetime(),
             forecast_horizon=1,
@@ -165,53 +178,24 @@ class ForecastContext:
 
 
 class BaseModel(ABC):
-    """
-    Абстрактный класс адаптера моделей
+    """Adapter interface wrapping persistence and prediction logic."""
 
-    Для реализации интерфейса, необходимо реализовать метод `predict`
-    """
-
-    def __init__(self, model_info_: ModelInfo, filepath_or_buffer) -> None:
+    def __init__(self, model_info_: ModelInfo, filepath_or_buffer: Any) -> None:
         self._model_info: ModelInfo = model_info_
-        self._model_meta = self._unpickle_file_or_buffer(filepath_or_buffer)
+        self._model_meta: Any = self._unpickle_file_or_buffer(filepath_or_buffer)
 
     @abstractmethod
     def predict(
-        self, forecast_context: ForecastContext, portfolio: DataFrame = None, **params
+        self,
+        forecast_context: ForecastContext,
+        portfolio: Optional[DataFrame] = None,
+        **params: Any,
     ) -> Any:
-        """
-        Возвращает предсказание десериализованной модели в произвольном формате
+        """Return a prediction produced by the underlying model."""
 
-        Parameters
-        ----------
-        forecast_context : ForecastContext
-            Контекст прогноза. Содержит в себе сценарий для прогноза, а также
-            (опционально) прогнозы других моделей. См. описание класса ForecastContext
-        portfolio : DataFrame, default = None
-            Датафрейм с дополнительными данными из дата провайдера
-        params
-            Произвольные параметры адаптера
+    def _unpickle_file_or_buffer(self, filepath_or_buffer: Any) -> Any:
+        """Load a pickled model from *filepath_or_buffer*."""
 
-        Returns
-        -------
-        prediction : Any
-            Предсказание модели в произвольной форме
-        """
-        pass
-
-    def _unpickle_file_or_buffer(self, filepath_or_buffer) -> Any:
-        """
-        Читает модель из файла или файла подобного объекта, возвращает объект модели
-
-        Parameters
-        ----------
-        filepath_or_buffer : файл или подобный файлу объект
-            путь к файлу или объект у которого есть метод read, например StringIO или BytesIO
-        Returns
-        -------
-        obj : Any
-            Объект модели
-        """
         if hasattr(filepath_or_buffer, "read"):
             return load(filepath_or_buffer)
 
@@ -228,114 +212,37 @@ class BaseModel(ABC):
 
 
 class ModelTrainer(ABC):
-    """
-    Абстрактный класс тренера моделей
-
-    Для реализации интерфейса, необходимо реализовать методы `get_trained_model` и `save_trained_model`
-    """
+    """Interface describing the operations required to train a model."""
 
     @abstractmethod
     def get_trained_model(
         self,
         spark: SparkSession,
         end_date: datetime,
-        start_date: datetime = None,
-        hyperparams: Dict[str, Any] = None,
+        start_date: Optional[datetime] = None,
+        hyperparams: Optional[Dict[str, Any]] = None,
     ) -> Any:
-        """
-        Обучает и возвращает модель с заданными параметрами
-
-        Parameters
-        ----------
-        spark : spark-сессия
-            Сессия для загрузки данных
-        end_date : datetime
-            Последний день периода, на котором обучается модель
-        start_date : datetime, default=None
-            Первый день периода, на котором обучается модель. Реализация метода должна обрабатывать значение по умолчанию None.
-        hyperparams : Dict[str, Any], default=None
-            Гиперпараметры обучения модели. В реализации могут отсутствовать, либо реализация должна обрабатывать
-            значение по умолчанию None (например загружать дефолтные гиперпараметры из глобальных переменных
-             или других источников).
-
-        Returns
-        -------
-        модель : Any
-            Произвольный класс обученной модели
-        """
-        pass
+        """Return a trained model instance."""
 
     @abstractmethod
     def save_trained_model(
         self,
-        spark: SparkSession,  # TODO: already have in __init__
+        spark: SparkSession,
         saving_path: str,
-        end_date: datetime,  # TODO: already have in __init__
-        start_date: datetime = None,  # TODO: already have in __init__
+        end_date: datetime,
+        start_date: Optional[datetime] = None,
         overwrite: bool = True,
-        hyperparams: Dict[str, Any] = None,  # TODO: already have in __init__
-    ) -> str:
-        """
-        Обучает и сохраняет модель с заданными параметрами. При этом должна
-        соблюдаться конвенция наименований сохраненных файлов
-
-        Parameters
-        ----------
-        spark : spark-сессия
-            Сессия для загрузки данных
-        saving_path: str
-            Папка, куда сохранится модель
-        end_date : datetime
-            Последний день периода, на котором обучается модель
-        start_date : datetime, default=None
-            Первый день периода, на котором обучается модель. Реализация метода
-            должна обрабатывать значение по умолчанию None.
-        overwrite : bool, default=True
-            Флаг перезаписи модели. Если True, то метод должен перезаписывать
-            существующий файл модели. Если False - то пропускать обучение, если
-            файл уже есть, и сразу возвращать название файла.
-        hyperparams : Dict[str, Any], default=None
-            Гиперпараметры обучения модели. В реализации могут отсутствовать,
-            либо реализация должна обрабатывать значение по умолчанию None
-            (например загружать дефолтные гиперпараметры из глобальных переменных
-            или других источников).
-
-        Returns
-        -------
-        file_name : str
-            Возвращает имя сохраненной модели в случае успеха обучения и
-            сохранения модели, иначе - None
-        """
-        pass
+        hyperparams: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """Persist a trained model and return its storage identifier."""
 
 
 class DataLoader(ABC):
-    """
-    Абстрактный класс загрузчика данных.
-
-    Для реализации интерфейса, необходимо реализовать методы get_maximum_train_range, get_training_data,
-    get_prediction_data и get_ground_truth
-    """
+    """Abstract base class describing data access operations."""
 
     @abstractmethod
     def get_maximum_train_range(self, spark: SparkSession) -> Tuple[datetime, datetime]:
-        """
-        Возвращает максимальный доступный период обучения модели.
-        Рекомендуется определять минимальную дату начала обучения из соображений валидности модели на старых периодах,
-        а не из доступности данных (но проверка доступности все равно нужна).
-        Максимальную дату конца обучения, наоборот, следует определять из доступности самых последних данных.
-
-        Parameters
-        ----------
-        spark : spark-сессия
-            Сессия для загрузки данных
-
-        Returns
-        -------
-        maximum_train_range : Tuple[datetime, datetime]
-            Кортеж вида (start_date, end_date).
-        """
-        pass
+        """Return the maximum available training period."""
 
     @abstractmethod
     def get_training_data(
@@ -343,30 +250,9 @@ class DataLoader(ABC):
         spark: SparkSession,
         start_date: datetime,
         end_date: datetime,
-        params: Dict[str, Any] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, DataFrame]:
-        """
-        Возвращает данные для обучения модели: фичи и таргет
-
-        Parameters
-        ----------
-        spark : spark-сессия
-            Сессия для загрузки данных
-        start_date : datetime
-            Первый день периода загружаемых данных
-        end_date : datetime
-            Последний день периода загружаемых данных
-        params : Dict[str, Any], default=None
-            Параметры загрузки данных. В реализации могут отсутствовать, либо реализация должна обрабатывать
-            значение по умолчанию None (например загружать дефолтные параметры из глобальных переменных
-             или других источников).
-
-        Returns
-        -------
-        training_data : Dict[str, DataFrame]
-            Словарь с данными для обучения модели произвольного вида (например {'target': DataFrame, 'features1': DataFrame, 'features2': DataFrame, ...})
-        """
-        pass
+        """Return training datasets required by the model."""
 
     @abstractmethod
     def get_prediction_data(
@@ -374,50 +260,9 @@ class DataLoader(ABC):
         spark: SparkSession,
         start_date: datetime,
         end_date: datetime,
-        params: Dict[str, Any] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, DataFrame]:
-        """
-        Возвращает реализовавшийся сценарий фичей для оценки точности модели на истории (бектеста).
-
-        Этот метод должен возвращать только те фичи, которые невозможно посчитать для будущего!
-        Если фича моделируется другой моделью, то она может считаться доступной в ForecastContext.model_data
-        Если фича может быть посчитана из текущего состояния (например портфолио на дату, плановые оттоки и д.р.),
-        то она должна быть загружена через метод get_portfolio, либо через отдельную модель.
-
-        Крайне рекомендуется загружать здесь фичи без предобработки,
-        чтобы аналогичный по атрибутному составу сценарий можно было бы заполнить
-        руками при необходимости. Предобработку следует делать либо в предикте модели, либо в ModelAdapter
-
-        Набор фичей может не совпадать с таковым на обучении (например, если обучались для таргета в виде % прироста,
-        а предсказывать хочется изначальный ряд - тогда одна из фичей должна содержать последнее известное значение ряда).
-
-
-        Также необходимо соблюдать формат возвращаемого словаря (см. ниже).
-
-        Parameters
-        ----------
-        spark : spark-сессия
-            Сессия для загрузки данных
-        start_date : datetime
-            Первый день периода загружаемых данных
-        end_date : datetime
-            Последний день периода загружаемых данных
-        params : Dict[str, Any], default=None
-            Параметры загрузки данных. В реализации могут отсутствовать, либо реализация должна обрабатывать
-            значение по умолчанию None (например загружать дефолтные параметры из глобальных переменных
-             или других источников).
-
-        Returns
-        -------
-        prediction_data : Dict[str, DataFrame]
-            Словарь с несколькими ключами. Ключ 'features' используется для датафрейма с данными в формате:
-                report_dt - даты концов месяцев, содержащиеся в периоде от start_date до end_date
-                feature_name1 - название первой фичи, должно совпадать с названием
-                колонки в Scenario.scenario_data, которую будет использовать ModelAdapter при предсказании
-                feature_name2, feature_name3, и т.д. - аналогично feature_name1
-            Могут использоваться дополнительные ключи если это необходимо.
-        """
-        pass
+        """Return feature data required for evaluation or forecasting."""
 
     @abstractmethod
     def get_ground_truth(
@@ -425,70 +270,30 @@ class DataLoader(ABC):
         spark: SparkSession,
         start_date: datetime,
         end_date: datetime,
-        params: Dict[str, Any] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, DataFrame]:
-        """
-        Возвращает реализовавшийся сценарий таргета для оценки точности модели на истории (бектеста).
-
-        Может не совпадать с таргетом в обучении (например, если обучались для таргета в виде % прироста,
-        а предсказывается изначальный ряд).
-
-        Также необходимо соблюдать формат возвращаемого словаря (см. ниже).
-
-        Parameters
-        ----------
-        spark : spark-сессия
-            Сессия для загрузки данных
-        start_date : datetime
-            Первый день периода загружаемых данных
-        end_date : datetime
-            Последний день периода загружаемых данных
-        params : Dict[str, Any], default=None
-            Параметры загрузки данных. В реализации могут отсутствовать, либо реализация должна обрабатывать
-            значение по умолчанию None (например загружать дефолтные параметры из глобальных переменных
-             или других источников).
-
-        Returns
-        -------
-        ground_truth : Dict[str, DataFrame]
-            Словарь с одним ключем 'target'. По ключу - датафрейм с данными в формате:
-            report_dt - даты концов месяцев, содержащиеся в периоде от start_date до end_date
-            target_var1, target_var2 и т.д. - столбцы таргета.
-        """
-        pass
+        """Return realised target values for the requested period."""
 
     def get_portfolio(
         self,
         spark: SparkSession,
         report_date: datetime,
-        params: Dict[str, Any] = None,
-    ) -> Dict[str, DataFrame]:
-        """
-        Возвращает портфель на отчетную дату, либо ничего.
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, DataFrame]]:
+        """Return optional portfolio data used by the calculator."""
 
-        Метод не обязателен к имплементации в наследниках.
-
-        Также необходимо соблюдать формат возвращаемого словаря (см. ниже).
-
-        Parameters
-        ----------
-        spark : spark-сессия
-            Сессия для загрузки данных
-        report_date : datetime
-            Отечтная дата, на которую будет загружен портфель
-        params : Dict[str, Any], default=None
-            Параметры загрузки данных. В реализации могут отсутствовать, либо реализация должна обрабатывать
-            значение по умолчанию None (например загружать дефолтные параметры из глобальных переменных
-             или других источников).
-
-        Returns
-        -------
-        portfolio_dict : Dict[str, DataFrame]
-            Словарь с одним или несколькими ключами, которые должны заканчиваться постфиксом "_portfolio".
-            Значения - DataFrame произвольного формата.
-            Этот словарь будет добавлен в ForecastContext.model_data до начала прогнозирования
-        """
         return None
+
+    def get_scenario(
+        self,
+        spark: SparkSession,
+        start_date: datetime,
+        end_date: datetime,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, DataFrame]:
+        """Return scenario data required for honest backtesting."""
+
+        raise NotImplementedError
 
 
 @dataclass(frozen=True)
@@ -497,26 +302,22 @@ class ModelMetaInfo:
     model_trainer: Type[ModelTrainer]
     data_loader: Type[DataLoader]
     adapter: Type[BaseModel]
-    segment: str = None
-    replenishable_flg: int = None
-    subtraction_flg: int = None
+    segment: Optional[str] = None
+    replenishable_flg: Optional[int] = None
+    subtraction_flg: Optional[int] = None
 
 
 class ModelContainer:
     def __init__(
         self,
-        models: Tuple[ModelMetaInfo] = None,
-        model_containers: Tuple["ModelContainer"] = None,
-    ):
-        if models is not None:
-            self.models: List[ModelMetaInfo] = list(models)
-        else:
-            self.models = []
+        models: Optional[Iterable[ModelMetaInfo]] = None,
+        model_containers: Optional[Iterable["ModelContainer"]] = None,
+    ) -> None:
+        self.models: List[ModelMetaInfo] = list(models) if models is not None else []
 
         if model_containers is not None:
             for model_container in model_containers:
-                for model_ in model_container.models:
-                    self.models.append(model_)
+                self.models.extend(model_container.models)
 
     @property
     def model_names(self) -> List[str]:
@@ -527,43 +328,39 @@ class ModelContainer:
         return {model.model_name: model for model in self.models}
 
     @property
-    def trainers(self) -> Dict[str, ModelTrainer]:
+    def trainers(self) -> Dict[str, Type[ModelTrainer]]:
         return {model.model_name: model.model_trainer for model in self.models}
 
     @property
-    def dataloaders(self) -> Dict[str, DataLoader]:
+    def dataloaders(self) -> Dict[str, Type[DataLoader]]:
         return {model.model_name: model.data_loader for model in self.models}
 
     @property
-    def adapter_types(self) -> Dict[str, DataLoader]:
+    def adapter_types(self) -> Dict[str, Type[BaseModel]]:
         return {model.model_name: model.adapter for model in self.models}
 
-    def get_model_by_name(self, model_name: str):
-        return self.models_dict.get(model_name, None)
+    def get_model_by_name(self, model_name: str) -> Optional[ModelMetaInfo]:
+        return self.models_dict.get(model_name)
 
-    def get_model_by_conditions(self, **conditions):
-        if conditions == {}:
+    def get_model_by_conditions(self, **conditions: Any) -> Optional[ModelMetaInfo]:
+        if not conditions:
             raise KeyError("Conditions are not defined")
 
-        model_counter = 0
-        for model in self.models:
-            if all([getattr(model, cond) == conditions[cond] for cond in conditions]):
-                if model_counter < 1:
-                    match = model
-                    model_counter += 1
-                else:
-                    raise KeyError(
-                        f"More than one model has conditions like {conditions}"
-                    )
-        if model_counter > 0:
-            return match
-        else:
-            return None
+        matches = [
+            model
+            for model in self.models
+            if all(getattr(model, cond) == value for cond, value in conditions.items())
+        ]
+
+        if len(matches) > 1:
+            raise KeyError(f"More than one model has conditions like {conditions}")
+
+        return matches[0] if matches else None
 
 
 @dataclass(frozen=True)
 class PackageMetaInfo:
-    models: Tuple[ModelMetaInfo]
+    models: Tuple[ModelMetaInfo, ...]
     author: str = "upfm"
     email: str = "upfm@vtb.ru"
 
