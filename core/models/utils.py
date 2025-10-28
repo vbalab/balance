@@ -4,13 +4,16 @@ from datetime import datetime
 from typing import Dict, Optional, Sequence, Union
 
 import numpy as np
-from numpy.typing import NDArray
+import polars as pl
 import pandas as pd
+import pyarrow.parquet as pq
+from pyarrow import fs
 from pandas import Series
 from pyspark import SparkConf
-from pyspark.sql import DataFrame as SparkDataFrame
-from pyspark.sql import SparkSession, functions
+from numpy.typing import NDArray
 from pyspark.sql.column import Column
+from pyspark.sql import SparkSession, functions
+from pyspark.sql import DataFrame as SparkDataFrame
 from core.definitions import (
     DEFAULT_SEGMENTS_,
     MATURITY_,
@@ -25,6 +28,38 @@ def generate_svo_flg(X: pd.DataFrame) -> pd.DataFrame:
     svo_flg = X.index == "2022-03-31"
     X["svo_flg"] = svo_flg.astype(float)
     return X
+
+
+def check_classpath_environ():
+    if "CLASSPATH" not in os.environ:
+        os.environ["CLASSPATH"] = os.popen(
+            "$HADOOP_HOME/bin/hadoop classpath --glob "
+        ).read()
+
+
+def load_table_from_hdfs(
+    file_name: str,
+    convert_datetime_to_date: bool = False,
+    cluster_name="",
+) -> pl.DataFrame:
+    check_classpath_environ()
+    hdfs = fs.HadoopFileSystem("hdfs://adhsb")
+    data = pq.read_table(file_name, filesystem=hdfs)
+    data = pl.from_arrow(data)
+    if convert_datetime_to_date:
+        data = data.with_columns(
+            pl.col(column).cast(pl.Date)
+            for column, dtype in zip(data.columns, data.dtypes)
+            if isinstance(dtype, pl.Datetime)
+        )
+    return data
+
+
+def save_table_to_hdfs(data: pl.DataFrame, file_name: str) -> None:
+    check_classpath_environ()
+    hdfs = fs.HadoopFileSystem("hdfs://adhsb")
+    t = data.to_arrow()
+    pq.write_table(t, file_name, filesystem=hdfs)
 
 
 def verify_data(

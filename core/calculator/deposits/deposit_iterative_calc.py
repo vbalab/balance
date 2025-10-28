@@ -226,9 +226,7 @@ class DepositIterativeCalculator(AbstractCalculator):
         self, model_meta: Optional[ModelMetaInfo], conditions: Dict[str, Any]
     ) -> ModelMetaInfo:
         if model_meta is None:
-            raise KeyError(
-                f"Model matching conditions {conditions} is not defined"
-            )
+            raise KeyError(f"Model matching conditions {conditions} is not defined")
         return model_meta
 
     def _resolve_model_info(self, model_name: str) -> ModelInfo:
@@ -353,8 +351,8 @@ class DepositIterativeCalculator(AbstractCalculator):
                 raise AttributeError(
                     f"Model trainer for '{model_name}' does not define prediction_type"
                 )
-            self.current_accounts_models[prediction_type] = self._model_register.get_model(
-                model_info
+            self.current_accounts_models[prediction_type] = (
+                self._model_register.get_model(model_info)
             )
 
     def _add_scenario_to_model_data(self, forecast_date: datetime) -> None:
@@ -846,11 +844,13 @@ class DepositIterativeCalculator(AbstractCalculator):
         ) * -1
         res = res.rename(columns={"close_month": _REPORT_DT_COLUMN})
         res[_REPORT_DT_COLUMN] = pd.to_datetime(res[_REPORT_DT_COLUMN]) + MonthEnd(0)
-        return res[[
-            _REPORT_DT_COLUMN,
-            *group_cols,
-            "contract_close",
-        ]]
+        return res[
+            [
+                _REPORT_DT_COLUMN,
+                *group_cols,
+                "contract_close",
+            ]
+        ]
 
     def _agg_renewal(
         self, port: pd.DataFrame, group_cols: Sequence[str]
