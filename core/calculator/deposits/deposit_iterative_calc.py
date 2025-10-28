@@ -1,11 +1,10 @@
+"""Iterative deposit calculator assembling numerous component models."""
+
 from __future__ import annotations
 
 from datetime import datetime
 from enum import auto
 from functools import reduce
-
-"""Iterative deposit calculator assembling numerous component models."""
-
 from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
@@ -47,10 +46,14 @@ from core.definitions import (
     DEFAULT_SEGMENTS_,
     NONDEFAULT_SEGMENTS_,
     BUCKETED_BALANCE_MAP_,
-    SEGMENT_MAP_,
+    MATURITY_TO_MONTH_MAP_,
+    MASS_BALANCE_BUCKETS,
+    PRIV_BALANCE_BUCKETS,
     SA_PRODUCTS_,
+    SEGMENT_MAP_,
+    VIP_BALANCE_BUCKETS,
+    month_to_target_maturity,
 )
-from core.definitions import *
 
 
 portfolio_result_cols = [
@@ -784,7 +787,7 @@ class DepositIterativeCalculator(AbstractCalculator):
             ]
             close_port = self._add_cols_to_port(close_port)
             agg_close = (
-                close_port.groupby(["close_month"] + group_cols)[
+                close_port.groupby(["close_month", *group_cols])[
                     ["total_generation", "renewal_balance_next_month"]
                 ]
                 .sum()
@@ -796,7 +799,11 @@ class DepositIterativeCalculator(AbstractCalculator):
         ) * -1
         res = res.rename(columns={"close_month": _REPORT_DT_COLUMN})
         res[_REPORT_DT_COLUMN] = pd.to_datetime(res[_REPORT_DT_COLUMN]) + MonthEnd(0)
-        return res[[_REPORT_DT_COLUMN] + group_cols + ["contract_close"]]
+        return res[[
+            _REPORT_DT_COLUMN,
+            *group_cols,
+            "contract_close",
+        ]]
 
     def _agg_renewal(
         self, port: pd.DataFrame, group_cols: Sequence[str]
@@ -806,7 +813,7 @@ class DepositIterativeCalculator(AbstractCalculator):
         )
 
         renewal = (
-            renewal.groupby([_REPORT_DT_COLUMN] + group_cols)["total_generation"]
+            renewal.groupby([_REPORT_DT_COLUMN, *group_cols])["total_generation"]
             .sum()
             .reset_index()
         )
@@ -1060,6 +1067,9 @@ class DepositIterativeCalculator(AbstractCalculator):
         return agg_data
 
     def calculate(self, calc_type: CalculationType) -> CalculationResult:
+        if not isinstance(calc_type, DepositsCalculationType):
+            raise TypeError("Unsupported calculation type for deposit calculator")
+
         port_res = []
         # добавляем исходный портфель, потом его уберем
         port_res.append(
@@ -1114,9 +1124,9 @@ class DepositIterativeCalculator(AbstractCalculator):
             calc_type,
             self._scenario,
             {
-                calc_type.Deposits.name: calculated_data,
-                calc_type.SavingAccounts.name: sa_data,
-                calc_type.CurrentAccounts.name: ca_data,
+                DepositsCalculationType.Deposits.name: calculated_data,
+                DepositsCalculationType.SavingAccounts.name: sa_data,
+                DepositsCalculationType.CurrentAccounts.name: ca_data,
                 #                                                             'Volumes': volumes_table,
                 #                                                             'forecast_values': forecast_values,
                 "model_data": self._forecast_context.model_data[
