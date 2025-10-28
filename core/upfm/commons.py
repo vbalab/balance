@@ -299,8 +299,8 @@ class DataLoader(ABC):
 @dataclass(frozen=True)
 class ModelMetaInfo:
     model_name: str
-    model_trainer: Type[ModelTrainer]
-    data_loader: Type[DataLoader]
+    model_trainer: ModelTrainer
+    data_loader: DataLoader
     adapter: Type[BaseModel]
     segment: Optional[str] = None
     replenishable_flg: Optional[int] = None
@@ -328,11 +328,11 @@ class ModelContainer:
         return {model.model_name: model for model in self.models}
 
     @property
-    def trainers(self) -> Dict[str, Type[ModelTrainer]]:
+    def trainers(self) -> Dict[str, ModelTrainer]:
         return {model.model_name: model.model_trainer for model in self.models}
 
     @property
-    def dataloaders(self) -> Dict[str, Type[DataLoader]]:
+    def dataloaders(self) -> Dict[str, DataLoader]:
         return {model.model_name: model.data_loader for model in self.models}
 
     @property
