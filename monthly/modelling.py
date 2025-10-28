@@ -1,11 +1,14 @@
 import re
+from datetime import date
+from typing import Sequence
+
 import numpy as np
 import pandas as pd
 import polars as pl
-from datetime import date
 from tqdm.notebook import tqdm
+
 from core.models.utils import run_spark_session
-from dateutil.relativedelta import relativedelta
+from dateutil.relativedelta import relativedelta  # type: ignore[import]
 from statsmodels.tsa.seasonal import seasonal_decompose
 
 
@@ -29,7 +32,7 @@ key_rate = pl.read_csv("data/key_rate.csv")
 
 # ---- #
 
-group_cols = ["salary_flg", "pensioner_flg", "is_vip_or_prv"]
+group_cols: list[str] = ["salary_flg", "pensioner_flg", "is_vip_or_prv"]
 
 current_accounts = current_accounts.filter(
     pl.col("product_name") == "CURRENT_ACCOUNTS"
@@ -115,7 +118,7 @@ market_rates = market_rates.sort("report_dt")
 
 
 # ---- #
-def add_ftp_rates(df_balance, df_ftp):
+def add_ftp_rates(df_balance: pl.DataFrame, df_ftp: pl.DataFrame) -> pl.DataFrame:
     df_balance = df_balance.clone()
 
     df_balance = df_balance.join(df_ftp, on="report_dt", how="left")
@@ -130,7 +133,9 @@ def add_ftp_rates(df_balance, df_ftp):
     return df_balance
 
 
-def add_market_rates(df_balance, df_market_rates):
+def add_market_rates(
+    df_balance: pl.DataFrame, df_market_rates: pl.DataFrame
+) -> pl.DataFrame:
     df_balance = df_balance.clone()
 
     df_balance = df_balance.join(df_market_rates, on="report_dt", how="left")
@@ -145,8 +150,10 @@ def add_market_rates(df_balance, df_market_rates):
     return df_balance
 
 
-def add_calendar_dummies(df: pl.DataFrame, date_col: str):
-    def _add_between_dates_dummies(name, start, end, ds_col):
+def add_calendar_dummies(df: pl.DataFrame, date_col: str) -> pl.DataFrame:
+    def _add_between_dates_dummies(
+        name: str, start: date, end: date, ds_col: str
+    ) -> pl.Expr:
         return (
             pl.when((pl.col(ds_col) >= pl.lit(start)) & (pl.col(ds_col) <= pl.lit(end)))
             .then(1)
@@ -229,7 +236,7 @@ def seasonal_decompose_by_group(
 rate_offs = [*range(1, 12 + 1)]
 
 
-def add_ftp_rates_diffs(df: pl.DataFrame, group_cols: list[str]):
+def add_ftp_rates_diffs(df: pl.DataFrame, group_cols: Sequence[str]) -> pl.DataFrame:
     df = df.with_columns(
         [
             pl.col("VTB_90d_ftp_rate")
@@ -252,7 +259,7 @@ def add_ftp_rates_diffs(df: pl.DataFrame, group_cols: list[str]):
     return df
 
 
-def add_market_rates_diffs(df: pl.DataFrame, group_cols: list[str]):
+def add_market_rates_diffs(df: pl.DataFrame, group_cols: Sequence[str]) -> pl.DataFrame:
     df = df.with_columns(
         [
             pl.col("key_rate").diff(n=off).over(group_cols).alias(f"key_rate_diff{off}")
@@ -263,7 +270,7 @@ def add_market_rates_diffs(df: pl.DataFrame, group_cols: list[str]):
     return df
 
 
-def create_static_features(df: pl.DataFrame):
+def create_static_features(df: pl.DataFrame) -> pl.DataFrame:
     df = df.clone()
     df = df.sort(["report_dt", *group_cols])
 
@@ -277,7 +284,9 @@ def create_static_features(df: pl.DataFrame):
     return df
 
 
-def add_diff_log(df: pl.DataFrame, target_col: str, group_cols: list[str]):
+def add_diff_log(
+    df: pl.DataFrame, target_col: str, group_cols: Sequence[str]
+) -> pl.DataFrame:
     df = df.with_columns(
         (pl.col(target_col)).log().alias(f"log_{target_col}"),
     )
@@ -296,8 +305,8 @@ def add_lags(
     df: pl.DataFrame,
     y_col: str,
     date_col: str,
-    group_cols: list[str],
-    offsets: list[str],
+    group_cols: Sequence[str],
+    offsets: Sequence[str],
 ) -> pl.DataFrame:
     def _normalize_offset(off: str) -> str:
         s = off.strip().lower()
@@ -316,7 +325,7 @@ def add_lags(
     df_cast = df.with_columns(pl.col(date_col).cast(pl.Date).alias(date_col))
     sort_keys = list(group_cols) + [date_col]
     df_sorted = df_cast.sort(sort_keys)
-    right = df_sorted.select(group_cols + [date_col, y_col])
+    right = df_sorted.select([*group_cols, date_col, y_col])
     out = df_sorted
 
     for off in offsets:
@@ -349,8 +358,8 @@ def add_cumulative_lags(
     df: pl.DataFrame,
     y_col: str,
     date_col: str,
-    group_cols: list[str],
-    offsets: list[int],
+    group_cols: Sequence[str],
+    offsets: Sequence[int],
 ) -> pl.DataFrame:
     df = df.sort([date_col, *group_cols])
 
@@ -375,7 +384,7 @@ n_accounts_lags = [f"{i}m" for i in range(1, 12 + 1)]
 cum_n_accounts_lags = [3, 6, 12]
 
 
-def create_target_based_features(df: pl.DataFrame):
+def create_target_based_features(df: pl.DataFrame) -> pl.DataFrame:
     df = df.clone()
     df = df.sort(["report_dt", *group_cols])
 
@@ -439,7 +448,9 @@ PCA_FEATURES = NUMERICAL_FEATURES + LAG_FEATURES
 NON_PCA_FEATURES = CATEGORICAL_FEATURES
 
 
-def TimeTrainTestSplitDate(df: pl.DataFrame, split_date: date):
+def TimeTrainTestSplitDate(
+    df: pl.DataFrame, split_date: date
+) -> tuple[pl.DataFrame, pl.DataFrame]:
     df = df.clone()
 
     df_train = df.filter(pl.col("report_dt") < split_date)
@@ -469,7 +480,9 @@ def make_test_rows(start: date, end: date) -> pl.DataFrame:
     )
 
 
-def concat_new_test_batch(df_train, df_test):
+def concat_new_test_batch(
+    df_train: pl.DataFrame, df_test: pl.DataFrame
+) -> pl.DataFrame:
     df_test_aligned = df_test.select(
         [
             pl.col(c) if c in df_test.columns else pl.lit(None).alias(c)
@@ -486,17 +499,16 @@ def duplicate_from_date_forward(
     df: pl.DataFrame,
     date_col: str,
     start_from: str | pl.Date,
-    cols_to_copy: list[str],
-    group_cols: list[str],
+    cols_to_copy: Sequence[str],
+    group_cols: Sequence[str],
 ) -> pl.DataFrame:
     df = df.with_columns(pl.col(date_col).cast(pl.Date))
 
     start_from = (
         df.filter(pl.col(date_col) >= start_from).select(pl.col(date_col).min()).item()
     )
-    base_vals = df.filter(pl.col(date_col) == pl.lit(start_from)).select(
-        group_cols + cols_to_copy
-    )
+    select_cols = [*group_cols, *cols_to_copy]
+    base_vals = df.filter(pl.col(date_col) == pl.lit(start_from)).select(select_cols)
 
     df_out = (
         df.join(base_vals, on=group_cols, how="left")
@@ -516,14 +528,14 @@ def duplicate_from_date_forward(
 
 
 def create_sample(
-    current_accounts_train,
-    ftp_rates_train,
-    ftp_rates_test,
-    market_rates_train,
-    market_rates_test,
-    start_date,
-    end_date,
-):
+    current_accounts_train: pl.DataFrame,
+    ftp_rates_train: pl.DataFrame,
+    ftp_rates_test: pl.DataFrame,
+    market_rates_train: pl.DataFrame,
+    market_rates_test: pl.DataFrame,
+    start_date: date,
+    end_date: date,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
     df_train = add_ftp_rates(current_accounts_train, ftp_rates_train)
     df_train = add_market_rates(df_train, market_rates_train)
 
@@ -555,7 +567,7 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.linear_model import Lasso
 
 
-def GetPipeline():
+def GetPipeline() -> Pipeline:
     pca_numerical = Pipeline(
         [
             ("scaler", StandardScaler()),
@@ -577,8 +589,8 @@ def GetPipeline():
     )
 
 
-def train_linreg(df_train, n_months):
-    models = []
+def train_linreg(df_train: pl.DataFrame, n_months: int) -> list[Pipeline]:
+    models: list[Pipeline] = []
 
     for horizon in range(n_months):
         df_tmp = df_train.with_columns(
@@ -596,8 +608,10 @@ def train_linreg(df_train, n_months):
     return models
 
 
-def test_linreg(df_test, models, n_months):
-    y_pred = []
+def test_linreg(
+    df_test: pl.DataFrame, models: Sequence[Pipeline], n_months: int
+) -> list[float]:
+    y_pred: list[float] = []
 
     dates = (
         df_test.select(pl.col("report_dt").unique().sort())
@@ -661,7 +675,9 @@ def build_level_pred(
     return df
 
 
-def build_test_prediction_model(df_train, df_test, y_pred):
+def build_test_prediction_model(
+    df_train: pl.DataFrame, df_test: pl.DataFrame, y_pred: Sequence[float]
+) -> pd.DataFrame:
     df = pl.concat([df_train, df_test], how="vertical")
     df = df.to_pandas()
 
